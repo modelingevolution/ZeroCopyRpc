@@ -30,3 +30,5 @@
 *.exe
 *.out
 *.app
+/NativeRpc/.vs
+/NativeRpc/out/build/x64-debug
