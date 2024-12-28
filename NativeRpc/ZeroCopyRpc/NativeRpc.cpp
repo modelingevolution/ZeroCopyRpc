@@ -3,6 +3,8 @@
 #include <vector>
 #include "NativeRpc.h"
 
+#include "SharedMemoryClient.h"
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 bool isDebuggerAttached() {
@@ -20,7 +22,7 @@ using namespace boost::interprocess;
 using namespace std;
 typedef CyclicBuffer<sizeof(int) * 2, 2> Buffer;
 
-random_generator Random::Shared;
+
 
 int ParseInt(int index, int argc, char* argv[]);
 void AppendInt(Buffer& b, int value, int type = 999);
@@ -86,10 +88,10 @@ void test_cyclic_buffer2();
 
 int main(int argc, char* argv[])
 {
-    while (!isDebuggerAttached()) {
+    /*while (!isDebuggerAttached()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::cout << "Waiting for attach..." << endl;
-    }
+    }*/
     try
     {
         int arg1 = ParseInt(1, argc, argv); // Call ParseInt with index 1
@@ -140,15 +142,28 @@ void test_server()
     auto topic = srv.CreateTopic("chick");
     cout << "Server ready.";
     cout << "Waiting for commands..." << endl;
+    
+    long long i = 0;
+    cout << "Let's run like crazy....";
     while (true) {
-        string line;
-        cin >> line;
+        
         {
-            auto prep = topic->Prepare(sizeof(long), 2);
-            long* ptr = (long*)prep.Span().Start;
-            *ptr = 123;
-            prep.Span().Commit(sizeof(long));
+            string line;
+            cin >> line;
+            //std::this_thread::sleep_for(std::chrono::milliseconds(23));
+            if (line == "q") break;
+            {
+                auto prep = topic->Prepare(sizeof(long long) * 2, 2);
+                long long* ptr = (long long*)prep.Span().Start;
+                auto n = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::high_resolution_clock::now().time_since_epoch()
+                ).count();
+                ptr[0] = n;
+                ptr[1] = ++i;
+                prep.Span().Commit(sizeof(long long) * 2);
+            }
         }
+
     }
     
 }
@@ -160,13 +175,23 @@ void test_client()
     auto cursor = client.Subscribe("chick");
     cout << "Client subscribed" << endl;
     cout << "Waiting for commands..." << endl;
-    string line;
-    cin >> line;
+   
     while (true)
     {
+        string line;
+        cin >> line;
+        if(line == "d")
+        {
+            delete cursor.release();
+        }
         auto accessor = cursor->Read();
-        long* ptr = (long*) accessor.Get();
-        std::cout << "Received message, type: " << accessor.Item->Type << " size: " << accessor.Item->Size << " value: " << *ptr << std::endl;;
+        long long* ptr = (long long*) accessor.Get();
+        auto n = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch()
+        ).count();
+        auto d = n - ptr[0];
+        auto i = ptr[1];
+        std::cout << "Received message, type: " << accessor.Item->Type << " size: " << accessor.Item->Size << " value: " << i << " delay: " << d << std::endl;;
     }
 
 }
