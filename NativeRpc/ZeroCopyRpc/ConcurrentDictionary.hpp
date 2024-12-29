@@ -1,6 +1,11 @@
 #pragma once
 
 #include <optional>
+#include <shared_mutex>
+#include <unordered_map>
+#include <utility>  // for std::pair
+#include <memory>   // for std::shared_ptr if needed
+
 
 
 template <typename Key, typename Value>

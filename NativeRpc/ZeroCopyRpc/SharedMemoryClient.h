@@ -30,10 +30,11 @@
 #include "Messages.h"
 #include "Random.h"
 #include "ProcessUtils.h"
+#include "Export.h"
 using namespace boost::interprocess;
 using namespace boost::uuids;
 
-class SharedMemoryClient
+class EXPORT SharedMemoryClient
 {
 private:
     struct Callback

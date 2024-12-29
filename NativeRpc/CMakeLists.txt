@@ -9,8 +9,14 @@ if (POLICY CMP0141)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
 project ("ZeroCopyRpc")
 
 # Include sub-projects.
 add_subdirectory ("ZeroCopyRpc")
 
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)  # Google Test-specific option
+add_subdirectory(external/googletest)
+
+add_subdirectory(tests)
