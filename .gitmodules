@@ -1,0 +1,3 @@
+[submodule "NativeRpc/external/googletest"]
+	path = NativeRpc/external/googletest
+	url = https://github.com/google/googletest.git
