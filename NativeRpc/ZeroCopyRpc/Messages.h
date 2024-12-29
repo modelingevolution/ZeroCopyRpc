@@ -149,8 +149,9 @@ struct SubscriptionSharedData
     ulong StartOffset;
     std::atomic<ulong> Notified;
     std::atomic<bool> PendingRemove;
+    std::atomic<bool> Active;
     pid_t Pid;
-    void Reset(pid_t pid) { Pid = pid; Notified.store(0); }
+    void Reset(pid_t pid) { Pid = pid; Notified.store(0); Active.store(true); }
 };
 #pragma pack(pop)
 

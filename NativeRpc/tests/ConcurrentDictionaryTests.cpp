@@ -11,22 +11,25 @@ protected:
 // Basic Operations Tests
 TEST_F(ConcurrentDictionaryTest, InsertAndRetrieve) {
     dict.InsertOrUpdate(1, "one");
-    auto value = dict.TryGetValue(1);
-    ASSERT_TRUE(value.has_value());
-    EXPECT_EQ(*value, "one");
+    std::string value;
+    auto ret = dict.TryGetValue(1, value);
+    ASSERT_TRUE(ret);
+    EXPECT_EQ(value, "one");
 }
 
 TEST_F(ConcurrentDictionaryTest, NonExistentKey) {
-    auto value = dict.TryGetValue(999);
-    ASSERT_FALSE(value.has_value());
+    std::string value;
+    auto ret = dict.TryGetValue(999, value);
+    ASSERT_FALSE(ret);
 }
 
 TEST_F(ConcurrentDictionaryTest, UpdateExistingKey) {
     dict.InsertOrUpdate(1, "one");
     dict.InsertOrUpdate(1, "new_one");
-    auto value = dict.TryGetValue(1);
-    ASSERT_TRUE(value.has_value());
-    EXPECT_EQ(*value, "new_one");
+    std::string value;
+    auto ret = dict.TryGetValue(1, value);
+    ASSERT_TRUE(ret);
+    EXPECT_EQ(value, "new_one");
 }
 
 TEST_F(ConcurrentDictionaryTest, RemoveExistingKey) {
@@ -63,8 +66,9 @@ TEST_F(ConcurrentDictionaryTest, ConcurrentReads) {
 
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&]() {
-            auto value = dict.TryGetValue(1);
-            if (value.has_value() && *value == "one") {
+            std::string value;
+            auto ret = dict.TryGetValue(1, value);
+            if (ret && value == "one") {
                 successfulReads++;
             }
             });
@@ -120,8 +124,9 @@ TEST_F(ConcurrentDictionaryTest, ConcurrentReadWriteOperations) {
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&]() {
             // Perform read
-            auto value = dict.TryGetValue(1);
-            if (value.has_value()) {
+            std::string value;
+            auto ret = dict.TryGetValue(1, value);
+            if (ret) {
                 // Perform write
                 dict.InsertOrUpdate(1, "updated");
                 successfulOperations++;

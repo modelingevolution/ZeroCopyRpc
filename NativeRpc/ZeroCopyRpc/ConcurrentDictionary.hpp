@@ -20,13 +20,14 @@ public:
         map[key] = value;
     }
     // Tries to get the value associated with a key
-    std::optional<Value> TryGetValue(const Key& key) const {
+    bool TryGetValue(const Key& key, Value& value) const {
         std::shared_lock<std::shared_mutex> lock(mtx);
         auto it = map.find(key);
         if (it != map.end()) {
-            return it->second;
+            value = it->second; // Copy the value to the provided reference
+            return true;        // Indicate that the key was found
         }
-        return std::nullopt;
+        return false;           // Indicate that the key was not found
     }
     // Removes a key-value pair
     bool Remove(const Key& key) {

@@ -7,12 +7,13 @@ cmake_minimum_required(VERSION 3.12)
 add_executable(ZeroCopyRpcTests test_main.cpp "ConcurrentDictionaryTests.cpp")
 
 # Set C++17 as the standard for the test target
-target_compile_features(ZeroCopyRpcTests PRIVATE cxx_std_17)
-set_target_properties(ZeroCopyRpcTests PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON
-    CXX_EXTENSIONS OFF
-)
+#target_compile_features(ZeroCopyRpcTests PRIVATE cxx_std_17)
+
+#set_target_properties(ZeroCopyRpcTests PROPERTIES
+#    CXX_STANDARD 17
+#    CXX_STANDARD_REQUIRED ON
+#    CXX_EXTENSIONS OFF
+#)
 
 # Link the test executable with gtest and the main library
 target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc)

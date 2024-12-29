@@ -1,8 +1,16 @@
 #pragma once
 
+#include <optional>
+#include <shared_mutex>
+#include <unordered_map>
+#include <utility>  // for std::pair
+#include <memory>   // for std::shared_ptr if needed
+#include <atomic>
+#include <array>
 
 template <typename T, size_t Capacity>
 class ConcurrentBag {
+    static T empty_value() { return T{}; }
 public:
     class Iterator {
     private:
@@ -51,17 +59,18 @@ public:
     private:
         // Helper to advance to the next non-empty slot
         inline void findNextValid() {
-            while (current < Capacity && bag.items[current].load(std::memory_order_acquire).empty()) {
+            while (current < Capacity && bag.items[current].load(std::memory_order_acquire) == empty_value()) {
                 ++current;
             }
         }
         inline void findPrvValid() {
-            while (current > 0 && bag.items[current].load(std::memory_order_acquire).empty()) {
+            while (current > 0 && bag.items[current].load(std::memory_order_acquire) == empty_value()) {
                 --current;
             }
         }
     };
     ConcurrentBag() {
+
         // Initialize free list
         for (size_t i = 0; i < Capacity; ++i) {
             free_list[i] = i; // Free list holds offsets
@@ -92,13 +101,14 @@ public:
         return true;
     }
     // Pop an item from the bag
-    std::optional<T> pop() {
-        size_t index;
-        if (!push_to_free_list(index)) {
-            return std::nullopt; // Bag is empty
-        }
-        return items[index].load(std::memory_order_acquire);
-    }
+    //std::optional<T> pop() {
+    //    size_t index;
+    //    if (!push_to_free_list(index)) {
+    //        return std::nullopt; // Bag is empty
+    //    }
+    //    return items[index].load(std::memory_order_acquire);
+    //}
+
     // Removes the specified item from the bag.
     // Returns true if the item was found and removed, false otherwise.
     bool remove(const T& item) {
@@ -106,9 +116,9 @@ public:
             // Check if the current slot matches the item
             T current = items[i].load(std::memory_order_acquire);
             if (current == item) {
-                T empty_value{}; // Default-constructed value represents "empty"
+                T empty = empty_value(); // Default-constructed value represents "empty"
                 // Attempt to replace the item with the empty value
-                if (items[i].compare_exchange_strong(current, empty_value, std::memory_order_release, std::memory_order_relaxed)) {
+                if (items[i].compare_exchange_strong(current, empty, std::memory_order_release, std::memory_order_relaxed)) {
                     // Successfully removed the item, push the index back into the free list
                     return push_to_free_list(i);
                 }

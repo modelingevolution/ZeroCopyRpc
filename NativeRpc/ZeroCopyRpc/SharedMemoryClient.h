@@ -89,7 +89,7 @@ private:
     Topic* GetOrCreate(const std::string& topic);
 
 public:
-    struct SubscriptionCursor
+    struct EXPORT SubscriptionCursor
     {
         SubscriptionCursor(byte sloth, Topic* topic);
 

@@ -75,10 +75,9 @@ void SharedMemoryClient::DispatchResponses()
 		if (_clientQueue.timed_receive(buffer, 1024, recSize, priority, timeout))
 		{
 			// auto callbackDelegate
-
-			auto msg = _messages.TryGetValue(correlationId);
-			if (msg.has_value())
-				msg.value().On(buffer);
+			Callback c;
+			if(_messages.TryGetValue(correlationId, c))
+				c.On(buffer);
 		}
 		else
 			std::cout << "No message has been received." << std::endl;

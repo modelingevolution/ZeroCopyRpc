@@ -1,18 +1,19 @@
 #pragma once
 #include "TypeDefs.h"
 #include "CyclicMemoryPool.hpp"
+#include "Export.h"
 
 template<unsigned long TSIZE, unsigned long TCAPACITY>
-class CyclicBuffer
+class EXPORT CyclicBuffer
 {
 public:
-    struct Item
+    struct EXPORT Item
     {
         size_t Size;
         ulong Type;
         size_t Offset;
     };
-    struct Accessor
+    struct EXPORT Accessor
     {
         Item* Item;
         CyclicBuffer* Buffer;
@@ -22,7 +23,7 @@ public:
             return (T*)(Buffer->_memory.Get(Item->Offset));
         }
         Accessor(const Accessor&) = delete;
-        Accessor(Accessor&& other) noexcept : Item(other->Item), Buffer(other->Buffer) {
+        Accessor(Accessor&& other) noexcept : Item(other.Item), Buffer(other.Buffer) {
             other.Item = nullptr;
             other.Buffer = nullptr;
         }
@@ -35,7 +36,7 @@ public:
 
         inline byte* Get() { return Buffer->_memory.Get(Item->Offset); }
     };
-    struct WriterScope
+    struct EXPORT WriterScope
     {
         CyclicMemoryPool<TSIZE>::Span Span;
         unsigned long Type;
@@ -66,10 +67,10 @@ public:
         CyclicBuffer* _parent;
 
     };
-    struct Cursor
+    struct EXPORT Cursor
     {
         unsigned long Index;
-        unsigned long Type() {}
+        
         unsigned long Remaining() const { return _parent->_nextIndex - Index; }
         Accessor Data() const
         {

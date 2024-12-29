@@ -3,7 +3,7 @@
 
 # Add the shared library target
 add_library(ZeroCopyRpc SHARED
-    "NativeRpc.cpp" "NativeRpc.h"
+    "SharedMemoryServer.cpp" "SharedMemoryServer.h"
     "IDPool.hpp" "TypeDefs.h"
     "Messages.h" "Random.h"
     "SharedMemoryClient.h" "SharedMemoryClient.cpp"
@@ -30,7 +30,7 @@ target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system)
 
 # Create an executable that uses the shared library
 add_executable(ZeroCopyRpcExecutable
-    "Program.cpp" # You need to provide a `main.cpp` file for the executable.
+    "Program.cpp" 
 )
 
 # Link the executable to the shared library

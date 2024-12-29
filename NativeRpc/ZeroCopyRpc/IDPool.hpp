@@ -14,6 +14,33 @@ public:
         }
     }
 
+    bool try_rent(const TId& target_id) {
+        Node* old_head = _head.load(std::memory_order_acquire);
+        Node* prev = nullptr;
+
+        while (old_head) {
+            // Look for the target ID in the free list
+            if (old_head->id == target_id) {
+                Node* next = old_head->next;
+
+                // If it's at the head of the list
+                if (prev == nullptr) {
+                    if (_head.compare_exchange_weak(old_head, next,
+                        std::memory_order_release, std::memory_order_relaxed)) {
+                        return true;
+                    }
+                }
+                // If it's in the middle/end of the list
+                else {
+                    prev->next = next;
+                    return true;
+                }
+            }
+            prev = old_head;
+            old_head = old_head->next;
+        }
+        return false;
+    }
     // Allocate an ID from the pool
     bool rent(TId& id) {
         Node* old_head = _head.load(std::memory_order_acquire);
