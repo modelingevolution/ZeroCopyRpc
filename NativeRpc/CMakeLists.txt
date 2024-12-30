@@ -23,4 +23,5 @@ add_subdirectory ("ZeroCopyRpc")
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)  # Google Test-specific option
 add_subdirectory(external/googletest)
 
+enable_testing()
 add_subdirectory(tests)

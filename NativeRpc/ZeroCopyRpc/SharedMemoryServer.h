@@ -82,11 +82,11 @@ public:
     struct Subscription
     {
         named_semaphore* Sem = nullptr;
-        const char* nSemName;
         int Index = -1;
+        std::string* Name;
         Subscription();
         Subscription(const std::string& semName, byte index = 0);
-        void Open(const std::string& semName, byte index);
+        void OpenOrCreate(const std::string& semName, byte index);
 
         friend bool operator==(const Subscription& lhs, const Subscription& rhs);
         friend bool operator!=(const Subscription& lhs, const Subscription& rhs);

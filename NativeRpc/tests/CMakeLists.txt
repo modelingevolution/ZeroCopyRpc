@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 # Add the test executable
-add_executable(ZeroCopyRpcTests test_main.cpp "ConcurrentDictionaryTests.cpp")
+add_executable(ZeroCopyRpcTests  "ConcurrentDictionaryTests.cpp")
 
 # Set C++17 as the standard for the test target
 #target_compile_features(ZeroCopyRpcTests PRIVATE cxx_std_17)

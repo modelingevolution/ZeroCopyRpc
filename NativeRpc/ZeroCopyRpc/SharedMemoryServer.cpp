@@ -6,16 +6,23 @@ template class CyclicBuffer<1024 * 1024 * 8, 256>;
 template class CyclicMemoryPool<8388608>;
 
 
-void TopicService::Subscription::Open(const std::string& semName, byte index)
+void TopicService::Subscription::OpenOrCreate(const std::string& semName, byte index)
 {
-	this->Sem = new named_semaphore(create_only, nSemName = semName.c_str(), 0);
+	if (this->Name != nullptr)
+	{
+		Close();
+	}
+
+	this->Name = new std::string(semName);
+	this->Sem = new named_semaphore(open_or_create, semName.c_str(), 0);
 	this->Index = index;
 	std::cout << "named semaphore created: " << semName << std::endl;
 }
 
-TopicService::Subscription::Subscription(const std::string& semName, byte index): Sem(nullptr)
+TopicService::Subscription::Subscription(const std::string& semName, byte index): Sem(nullptr), Name(nullptr)
 {
-	this->Sem = new named_semaphore(create_only, nSemName=semName.c_str(),0);
+	this->Name = new std::string(semName);
+	this->Sem = new named_semaphore(create_only, semName.c_str(),0);
 	this->Index = index;
 	std::cout << "named semaphore created: " << semName << std::endl;
 }
@@ -23,14 +30,15 @@ TopicService::Subscription::Subscription(const std::string& semName, byte index)
 void TopicService::Subscription::Close()
 {
 	if (Sem != nullptr)
-		named_semaphore::remove(nSemName);
+		named_semaphore::remove(Name->c_str());
 	delete Sem;
-	nSemName = nullptr;
+	delete Name;
+	Name = nullptr;
 	Sem = nullptr;
 	Index = -1;
 }
 
-TopicService::Subscription::Subscription(): Sem(nullptr), nSemName(nullptr)
+TopicService::Subscription::Subscription(): Sem(nullptr), Name(nullptr)
 {
 
 }
@@ -165,7 +173,8 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 						if (!this->_idPool.try_rent(index))
 							throw std::exception("Cannot rebuild subscription.");
 
-						Subscription s(GetSubscriptionSemaphoreName(sub.Pid, i), index);
+						Subscription s;
+						s.OpenOrCreate(GetSubscriptionSemaphoreName(sub.Pid, i), index);
 						this->_subscriptions.push(s);
 					}
 				}
