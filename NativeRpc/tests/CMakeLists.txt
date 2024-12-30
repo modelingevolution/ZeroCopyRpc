@@ -1,19 +1,11 @@
 # CMakeLists.txt for tests
 
 # Set minimum CMake version (adjust if needed)
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required (VERSION 3.8)
 
 # Add the test executable
-add_executable(ZeroCopyRpcTests  "ConcurrentDictionaryTests.cpp")
-
-# Set C++17 as the standard for the test target
-#target_compile_features(ZeroCopyRpcTests PRIVATE cxx_std_17)
-
-#set_target_properties(ZeroCopyRpcTests PROPERTIES
-#    CXX_STANDARD 17
-#    CXX_STANDARD_REQUIRED ON
-#    CXX_EXTENSIONS OFF
-#)
+add_executable(ZeroCopyRpcTests  "ConcurrentDictionaryTests.cpp" 
+"SharedMemoryServerTests.cpp" "IDPoolTests.cpp" "ConcurrentBugTests.cpp")
 
 # Link the test executable with gtest and the main library
 target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc)
@@ -37,3 +29,14 @@ if(MSVC)
 else()
     target_compile_options(ZeroCopyRpcTests PRIVATE -Wall -Wextra)
 endif()
+
+ message("CMAKE_BINARY_DIR:        ${CMAKE_BINARY_DIR}/bin/ZeroCopyRpc.dll")
+ message("Target output directory: ${CMAKE_BINARY_DIR}/tests")
+ file(GLOB DLL_FILES "${CMAKE_BINARY_DIR}/bin/ZeroCopyRpc.*")
+
+foreach(DLL ${DLL_FILES})
+    add_custom_command(TARGET ZeroCopyRpcTests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${DLL}" "${CMAKE_BINARY_DIR}/tests"
+    )
+endforeach()

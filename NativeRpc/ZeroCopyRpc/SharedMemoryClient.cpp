@@ -1,5 +1,6 @@
 #include "SharedMemoryClient.h"
 
+
 void SharedMemoryClient::Callback::On(void* msg) const
 {
 	Func(msg, State);
@@ -15,10 +16,11 @@ SharedMemoryClient::Callback::Callback(): State(nullptr), Func(nullptr)
 
 }
 
-void SharedMemoryClient::Unsubscribe(const std::string& topicName, byte sloth)
+void SharedMemoryClient::InvokeUnsubscribe(const std::string& topicName, byte sloth)
 {
 	UnSubscribeCommandEnvelope env;
 	env.Request.SetTopicName(topicName);
+	env.Request.SlothId = sloth;
 
 	auto delegate = std::bind(&SharedMemoryClient::OnUnsubscribed, this, std::placeholders::_1, std::placeholders::_2);
 	std::promise<UnSubscribeResponseEnvelope*> promise;
@@ -26,10 +28,14 @@ void SharedMemoryClient::Unsubscribe(const std::string& topicName, byte sloth)
 	_messages.InsertOrUpdate(env.CorrelationId, c);
 	_srvQueue.send(&env, sizeof(UnSubscribeCommandEnvelope), 0);
 	auto value = promise.get_future().get();
+	delete value;
 	// we don't do anything here, beside we need to wait. work is done at cursor and topic level.
 }
 
-SharedMemoryClient::Topic::Topic(SharedMemoryClient* parent, const std::string& topicName): Name(topicName), Parent(parent)
+SharedMemoryClient::Topic::Topic(SharedMemoryClient* parent, const std::string& topicName):
+Name(topicName), Parent(parent),
+_openCursorServerCount(0),
+_openCursorClientCount(0)
 {
 	Shm = new boost::interprocess::shared_memory_object(open_only, ShmName().c_str(), read_only);
 	Region = new mapped_region(*Shm, read_only);
@@ -51,8 +57,25 @@ SharedMemoryClient::Topic::~Topic()
 
 void SharedMemoryClient::Topic::Unsubscribe(byte sloth)
 {
-	this->Parent->Unsubscribe(this->Name, sloth);
+	this->_openCursorClientCount.fetch_sub(1);
+	_openSlots.erase(std::ranges::remove(_openSlots, sloth).begin(), _openSlots.end());
+
+	this->Parent->InvokeUnsubscribe(this->Name, sloth);
 	// most likely we should clean up if this was the last subscription.
+}
+
+void SharedMemoryClient::Topic::AckUnsubscribed(byte sloth)
+{
+	this->_openCursorServerCount.fetch_sub(1);
+}
+
+void SharedMemoryClient::Topic::UnsubscribeAll()
+{
+	std::vector<byte> slotsToUnsubscribe = _openSlots;
+	for (auto sloth : slotsToUnsubscribe)
+	{
+		Unsubscribe(sloth);
+	}
 }
 
 std::string SharedMemoryClient::Topic::ShmName() const
@@ -68,13 +91,19 @@ void SharedMemoryClient::DispatchResponses()
 	size_t recSize;
 	uint priority;
 	uuid& correlationId = *((uuid*)(buffer + sizeof(ulong)));
-	while (true)
+	ulong& msgType = *((ulong*)buffer);
+	bool canceled = false;
+	while (!canceled)
 	{
 		auto timeout = std::chrono::time_point<std::chrono::high_resolution_clock>::clock::now();
 		timeout = timeout + std::chrono::seconds(30);
 		if (_clientQueue.timed_receive(buffer, 1024, recSize, priority, timeout))
 		{
-			// auto callbackDelegate
+			if (msgType == 0)
+			{
+				canceled = true;
+				break;
+			}
 			Callback c;
 			if(_messages.TryGetValue(correlationId, c))
 				c.On(buffer);
@@ -106,17 +135,34 @@ void SharedMemoryClient::OnUnsubscribed(void* buffer, void* promise)
 	auto p = (std::promise<UnSubscribeResponseEnvelope*>*)promise;
 	p->set_value(new UnSubscribeResponseEnvelope(*ptr)); // default copy-ctor;
 	_messages.Remove(ptr->CorrelationId);
+	if (ptr->Response.IsSuccess) {
+		auto topic = this->Get(ptr->Response.TopicName);
+		topic->AckUnsubscribed(ptr->Response.SlothId);
+	}
 }
-
+SharedMemoryClient::Topic* SharedMemoryClient::Get(const std::string& topic)
+{
+	auto it = _topics.find(topic);
+	Topic* t = nullptr;
+	if (it == _topics.end())
+	{
+		return nullptr;
+	}
+	else
+	{
+		t = it->second;
+	}
+	return t;
+}
 SharedMemoryClient::Topic* SharedMemoryClient::GetOrCreate(const std::string& topic)
 {
-	auto it = _subscriptions.find(topic);
+	auto it = _topics.find(topic);
 	Topic* t = nullptr;
-	if (it == _subscriptions.end())
+	if (it == _topics.end())
 	{
 		// we need to create new.
 		t = new Topic(this, topic);
-		_subscriptions.emplace(topic, t);
+		_topics.emplace(topic, t);
 	}
 	else
 	{
@@ -128,8 +174,11 @@ SharedMemoryClient::Topic* SharedMemoryClient::GetOrCreate(const std::string& to
 SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(byte sloth, Topic* topic): _sem(nullptr), _sloth(sloth), _topic(topic), _cursor(nullptr)
 {
 	_sem = new named_semaphore(open_only, SemaphoreName().c_str());
-	auto value = _topic->Subscribers[sloth].StartOffset;
+	auto value = _topic->Subscribers[sloth].StartOffset; // this should the value from shared memory.
 	_cursor = new CyclicBuffer<1024 * 1024 * 8, 256>::Cursor(_topic->SharedBuffer->ReadNext(value)); // move ctor.
+	_topic->_openCursorClientCount.fetch_add(1);
+	_topic->_openCursorServerCount.fetch_add(1);
+	_topic->_openSlots.push_back(sloth);
 }
 
 std::string SharedMemoryClient::SubscriptionCursor::SemaphoreName() const
@@ -139,14 +188,25 @@ std::string SharedMemoryClient::SubscriptionCursor::SemaphoreName() const
 	return oss.str();
 }
 
-CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCursor::Read()
+CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCursor::Read() const
 {
 	_sem->wait();
 	if (_cursor->TryRead())
 		return _cursor->Data();
 	else throw std::exception("TryRead returned false.");
 }
+bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer<1024 * 1024 * 8, 256>::Accessor &a) const
+{
+	if (!_sem->try_wait())
+		return false;
 
+	if (_cursor->TryRead())
+	{
+		a = std::move(_cursor->Data());
+		return true;
+	}
+	else throw std::exception("TryRead returned false.");
+}
 SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(SubscriptionCursor&& other) noexcept: _sem(other._sem),
 	_sloth(other._sloth),
 	_topic(other._topic),
@@ -180,12 +240,28 @@ SharedMemoryClient::SubscriptionCursor::~SubscriptionCursor()
 	}
 }
 
+std::string SharedMemoryClient::ClientQueueName(const std::string& channelName)
+{
+	std::ostringstream oss;
+	oss << channelName << "." << getCurrentProcessId();
+	return oss.str();
+}
+
+
 SharedMemoryClient::SharedMemoryClient(const std::string& channelName):
 	_chName(channelName),
 	_srvQueue(open_only, channelName.c_str()),
-	_clientQueue(create_only, (channelName + "." + std::to_string(getCurrentProcessId())).c_str(), 256, 1024)
+	_clientQueue(create_only, ClientQueueName(channelName).c_str(), 256, 1024)
 {
-	std::thread([this]() { DispatchResponses(); }).detach();
+	this->_dispatcher = std::thread([this]() { DispatchResponses(); });
+}
+
+template<typename T>
+std::chrono::milliseconds RequestDuration(const T& response) 
+{
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::high_resolution_clock::now() - response.RequestCreated);
+	return duration;
 }
 
 void SharedMemoryClient::Connect()
@@ -196,11 +272,8 @@ void SharedMemoryClient::Connect()
 	Callback c(&promise, delegate);
 	_messages.InsertOrUpdate(env.CorrelationId, c);
 	_srvQueue.send(&env, sizeof(HelloCommandEnvelope), 0);
-	auto value = promise.get_future().get();
-	delete value;
-	auto duration = std::chrono::high_resolution_clock::now() - value->Response.From;
-	std::cout << "Connected. It took: " << duration << std::endl;
-
+	auto value = std::unique_ptr<HelloResponseEnvelope>(promise.get_future().get());
+	std::cout << "Connected. It took: " << RequestDuration(value->Response) << std::endl;
 }
 
 std::unique_ptr<SharedMemoryClient::SubscriptionCursor> SharedMemoryClient::Subscribe(const std::string& topicName)
@@ -223,6 +296,22 @@ std::unique_ptr<SharedMemoryClient::SubscriptionCursor> SharedMemoryClient::Subs
 
 	delete value;
 	return result;
+}
+
+SharedMemoryClient::~SharedMemoryClient()
+{
+	auto topics = _topics;
+	for(auto b = topics.begin(); b!= topics.end(); ++b)
+	{
+		b->second->UnsubscribeAll();
+		_topics.erase(b->first);
+	}
+	ulong msg = 0;
+	_clientQueue.send(&msg, sizeof(ulong), 0);
+	_dispatcher.join();
+
+	message_queue::remove(ClientQueueName(this->_chName).c_str());
+	
 }
 
 void swap(SharedMemoryClient::SubscriptionCursor& lhs, SharedMemoryClient::SubscriptionCursor& rhs) noexcept

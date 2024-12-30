@@ -37,6 +37,12 @@ using namespace boost::uuids;
 class EXPORT SharedMemoryClient
 {
 private:
+    static std::string ClientQueueName(const std::string& channelName);
+    // forward declarations:
+    struct SubscriptionCursor;
+    struct Callback;
+    class Topic;
+
     struct Callback
     {
         void* State;
@@ -48,11 +54,11 @@ private:
         std::function<void(void*, void*)> Func;
     };
 
-    void Unsubscribe(const std::string& topicName, byte sloth);
+    void InvokeUnsubscribe(const std::string& topicName, byte sloth);
 
     class Topic
     {
-
+        friend struct SharedMemoryClient::SubscriptionCursor;
     public:
         TopicMetadata* Metadata = nullptr;
         SubscriptionSharedData* Subscribers = nullptr;
@@ -64,8 +70,14 @@ private:
         ~Topic();
 
         void Unsubscribe(byte sloth);
+        void AckUnsubscribed(byte sloth);
+        void UnsubscribeAll();
 
     private:
+        // these are open cursors on the server, by this client.
+        std::atomic<byte> _openCursorServerCount;
+        std::atomic<byte> _openCursorClientCount;
+        std::vector<byte> _openSlots;
 
         shared_memory_object* Shm = nullptr;
         mapped_region* Region = nullptr;
@@ -76,7 +88,8 @@ private:
     message_queue _srvQueue;
     message_queue _clientQueue;
     ConcurrentDictionary<uuid, Callback> _messages;
-    std::unordered_map<std::string, Topic*> _subscriptions;
+    std::unordered_map<std::string, Topic*> _topics;
+    std::thread _dispatcher;
 
     void DispatchResponses();
 
@@ -85,6 +98,7 @@ private:
     void OnSubscribed(void* buffer, void* promise);
 
     void OnUnsubscribed(void* buffer, void* promise);
+    Topic* Get(const std::string& topic);
 
     Topic* GetOrCreate(const std::string& topic);
 
@@ -95,7 +109,8 @@ public:
 
         std::string SemaphoreName() const;
 
-        CyclicBuffer<1024 * 1024 * 8, 256>::Accessor Read();
+        CyclicBuffer<1024 * 1024 * 8, 256>::Accessor Read() const;
+        bool TryRead(CyclicBuffer<1024 * 1024 * 8, 256>::Accessor &a) const;
         SubscriptionCursor(const SubscriptionCursor& other) = delete;
 
         friend void swap(SubscriptionCursor& lhs, SubscriptionCursor& rhs) noexcept;
@@ -119,4 +134,6 @@ public:
     void Connect();
 
     std::unique_ptr<SubscriptionCursor> Subscribe(const std::string& topicName);
+    ~SharedMemoryClient();
+    
 };

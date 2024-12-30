@@ -78,12 +78,14 @@ private:
 };
 
 class EXPORT TopicService {
+      
+
 public:
     struct Subscription
     {
         named_semaphore* Sem = nullptr;
         int Index = -1;
-        std::string* Name;
+        std::string* Name = nullptr;
         Subscription();
         Subscription(const std::string& semName, byte index = 0);
         void OpenOrCreate(const std::string& semName, byte index);
@@ -93,43 +95,49 @@ public:
         void Close();
 
     };
-private:
-    std::string _channelName;
-    std::string _topicName;
-    
-    // Client Semaphore table
-    ConcurrentBag<Subscription,256> _subscriptions;
-    IDPool256 _idPool;
-
-    shared_memory_object* _shm;
-    mapped_region* _region;
-
-	// IN SHM
-    // Client PID, Notified, Current Offset table.
-    SubscriptionSharedData* _subscribers; // 256
-    
-    // IN SHM
-    CyclicBuffer8M* _buffer;
-    
-    void NotifyAll();
-   
-
-public:
     friend struct PublishScope;
     inline static std::string ShmName(const std::string& channel_name, const std::string& topic_name);
         
 
     void RemoveDanglingSubscriptionEntry(int i, SubscriptionSharedData& sub) const;
+    static bool ClearIfExists(const std::string& channel_name, const std::string& topic_name);
     TopicService(const std::string& channel_name, const std::string& topic_name);
 
     inline std::string GetSubscriptionSemaphoreName(pid_t pid, int index) const;
 
+    template<typename T, typename... Args>
+    void Publish(ulong type, Args&&... args) {
+        auto scope = Prepare(sizeof(T), type);
+        auto& span = scope.Span();
+        auto ptr = new (span.Start) T(std::forward<Args>(args)...);
+        span.Commit(sizeof(T));
+    }
+
+
     PublishScope Prepare(ulong minSize, ulong type);
     byte Subscribe(pid_t pid);
     bool Unsubscribe(pid_t pid, byte id) const;
-    
+    std::string Name();
     ~TopicService();
+private:
+    std::string _channelName;
+    std::string _topicName;
 
+    // Client Semaphore table
+    ConcurrentBag<Subscription, 256> _subscriptions;
+    IDPool256 _idPool;
+
+    shared_memory_object* _shm;
+    mapped_region* _region;
+
+    // IN SHM
+    // Client PID, Notified, Current Offset table.
+    SubscriptionSharedData* _subscribers; // 256
+
+    // IN SHM
+    CyclicBuffer8M* _buffer;
+
+    void NotifyAll();
 };
 
 
@@ -140,22 +148,25 @@ private:
     std::unordered_map<std::string, TopicService*> _topics;
     std::unordered_map<pid_t, message_queue*> _clients;
     message_queue _messageQueue;
-   
+    std::thread dispatcher;
+
     byte Subscribe(const char* topicName, pid_t pid);
-    bool Unsubscribe(const char* topicName, pid_t pid, byte id);
+    bool OnUnsubscribe(const char* topicName, pid_t pid, byte id);
 
     message_queue* GetClient(pid_t pid);
 
     void OnHelloResponse(pid_t pid, std::chrono::time_point<std::chrono::steady_clock> now, const uuid &correlationId);
 
     void DispatchMessages();
-
-    TopicService* OnCreateSubscription(const char *topicName);
-
+    
+    TopicService* CreateSubscription(const char *topicName);
+    bool RemoveSubscription(const char* topicName);
 public:
     SharedMemoryServer(const std::string& channel);
 
     ~SharedMemoryServer();
 
+    
     TopicService* CreateTopic(const std::string& topicName);
+    bool RemoveTopic(const std::string& topicName);
 };

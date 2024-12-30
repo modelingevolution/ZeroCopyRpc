@@ -45,7 +45,8 @@ TopicService::Subscription::Subscription(): Sem(nullptr), Name(nullptr)
 
 void TopicService::NotifyAll()
 {
-        
+	std::array<Subscription,256> toRemove;
+	int ix = 0;
 	for(auto i = _subscriptions.begin(); i.is_valid(); i++)
 	{
 		auto s =i.current_item();
@@ -53,26 +54,33 @@ void TopicService::NotifyAll()
 		auto& data = _subscribers[s.Index];
 		if(data.PendingRemove)
 		{
-			if (_subscriptions.remove(s))
-			{
-				i--;
-				s.Close();
-				data.PendingRemove.store(false);
-				data.Active.store(false);
-				this->_idPool.returns(s.Index);
-			}
+			toRemove[ix++] = s;
 		}
 		else 
 		{
 			if (data.Notified.fetch_add(1) == 0)
 			{
 				// this is the first time, need to set the cursors index.
-				data.StartOffset = _buffer->NextIndex() - 1;
+				data.StartOffset = _buffer->NextIndex();
+				std::cout << "SERVER: Start offset set: " << data.StartOffset << std::endl;
 			}
 
 			s.Sem->post();
 		}
             
+	}
+	for(--ix;ix >= 0;--ix)
+	{
+		auto s = toRemove[ix];
+		if (_subscriptions.remove(s))
+		{
+			auto& data = _subscribers[s.Index];
+			//i--;
+			s.Close();
+			data.PendingRemove.store(false);
+			data.Active.store(false);
+			this->_idPool.returns(s.Index);
+		}
 	}
 }
 
@@ -110,14 +118,38 @@ void TopicService::RemoveDanglingSubscriptionEntry(int i, SubscriptionSharedData
 	named_semaphore::remove(semName.c_str());
 	sub.PendingRemove.store(false);
 }
+bool TopicService::ClearIfExists(const std::string& channel_name, const std::string& topic_name)
+{
+	shared_memory_object shm(open_only, ShmName(channel_name, topic_name).c_str(), read_write);
+	offset_t size;
+	shm.get_size(size);
+	TopicMetadata m = {
+		sizeof(CyclicBuffer<1024 * 1024 * 8, 256>),
+		sizeof(SubscriptionSharedData) * 256 };
 
+	if(size > 0)
+	{
+		if (size != m.TotalSize())
+			shm.truncate(m.TotalSize());
+
+		mapped_region region(shm, read_write);
+		auto ptr = region.get_address();
+		memset(ptr, 0, size);
+
+		TopicMetadata* metadata = (TopicMetadata*)ptr;
+		*metadata = m; // copy
+		region.flush();
+		return true;
+	}
+	return false;
+}
 TopicService::TopicService(const std::string& channel_name, const std::string& topic_name) :
 	_channelName(channel_name),
 	_topicName(topic_name),
-	_subscriptions(),
 	_shm(nullptr),
 	_region(nullptr)
 {
+	std::cout << "Creating topic: " << channel_name << "." << topic_name << std::endl;
 	_shm = new shared_memory_object(open_or_create, ShmName(channel_name, topic_name).c_str(), read_write);
 
 	TopicMetadata m = {
@@ -199,8 +231,8 @@ byte TopicService::Subscribe(pid_t pid)
 	if (!this->_idPool.rent(index))
 		throw std::exception("Cannot find free id.");
 
-        
-	this->_subscribers[index].Reset(pid);
+	auto& item = this->_subscribers[index];
+	item.Reset(pid);
 	Subscription s(GetSubscriptionSemaphoreName(pid, index), index);
 	_subscriptions.push(s);
 
@@ -219,7 +251,8 @@ TopicService::~TopicService()
 
 	if (_shm != nullptr)
 	{
-		shared_memory_object::remove(_shm->get_name());
+		if(this->_subscriptions.empty())
+			shared_memory_object::remove(_shm->get_name());
 		delete _shm;
 		_shm = nullptr;
 	}
@@ -238,6 +271,11 @@ bool TopicService::Unsubscribe(pid_t pid, byte id) const
 		}
 	}
 	return false;
+}
+
+std::string TopicService::Name()
+{
+	return this->_topicName;
 }
 
 CyclicMemoryPool<8388608>::Span& PublishScope::Span()
@@ -268,7 +306,7 @@ byte SharedMemoryServer::Subscribe(const char* topicName, pid_t pid)
 	return 0;
 }
 
-bool SharedMemoryServer::Unsubscribe(const char* topicName, pid_t pid, byte id)
+bool SharedMemoryServer::OnUnsubscribe(const char* topicName, pid_t pid, byte id)
 {
 	std::string key(topicName);
 	auto it = _topics.find(key);
@@ -301,7 +339,7 @@ void SharedMemoryServer::OnHelloResponse(pid_t pid, std::chrono::time_point<std:
 	message_queue* m = GetClient(pid);
 	HelloResponseEnvelope env;
 	env.CorrelationId = correlationId;
-	env.Response.From = now;
+	env.Response.RequestCreated = now;
 	m->send(&env, sizeof(HelloResponseEnvelope), 0);
 
 }
@@ -312,7 +350,8 @@ void SharedMemoryServer::DispatchMessages()
 	size_t recSize;
 	uint priority;
 	ulong& messageType = *((ulong*)buffer);
-	while(true)
+	bool canceled = false;
+	while(!canceled)
 	{
 		auto timeout = std::chrono::time_point<std::chrono::high_resolution_clock>::clock::now();
 		timeout = timeout + std::chrono::seconds(30);
@@ -320,6 +359,9 @@ void SharedMemoryServer::DispatchMessages()
 		{
 			switch(messageType)
 			{
+			case 0:
+				canceled = true;
+				break;
 			case 1:
 				{
 					auto& env = *(SubscribeCommandEnvelope*)buffer;
@@ -338,22 +380,45 @@ void SharedMemoryServer::DispatchMessages()
 				{
 					auto& env= *(CreateSubscriptionEnvelope*)buffer;
 					std::cout << "Create subscription, " << env.Request << std::endl;
-					env.Set(this->OnCreateSubscription(env.Request.TopicName));
+					env.Set(this->CreateSubscription(env.Request.TopicName));
 					break;
 				}
 			case 3:
 				{
 					auto& env = *(HelloCommandEnvelope*)buffer;
 					std::cout << "Hello request from Pid: " << env.Pid << std::endl;
-					this->OnHelloResponse(env.Pid, env.Request.Now, env.CorrelationId);
+					this->OnHelloResponse(env.Pid, env.Request.Created, env.CorrelationId);
 					break;
 				}
 			case 6:
 				{
 					auto& env = *(UnSubscribeCommandEnvelope*)buffer;
-					this->Unsubscribe(env.Request.TopicName,  env.Pid, env.Request.Id);
+					
+					message_queue* m = GetClient(env.Pid);
+					if (m == nullptr)
+					{
+						std::cout << "Cannot find message queue for client: " << env.Pid << std::endl;
+						continue;
+					}
+
+					UnSubscribeResponseEnvelope rsp;
+					rsp.CorrelationId = env.CorrelationId;
+					std::string tmp = env.Request.TopicName;
+					rsp.Response.SetTopicName(tmp);
+					rsp.Response.IsSuccess = this->OnUnsubscribe(env.Request.TopicName, env.Pid, env.Request.SlothId);
+					rsp.Response.SlothId = env.Request.SlothId;
+					m->send(&rsp, sizeof(UnSubscribeResponseEnvelope), 0);
+
 					break;
 				}
+			case 8:
+				{
+				auto& env = *(RemoveSubscriptionEnvelope*)buffer;
+				std::cout << "Remove subscription, " << env.Request << std::endl;
+				env.Set(this->RemoveSubscription(env.Request.TopicName));
+				break;
+				}
+			
 			default:
 				break;
 			}
@@ -363,7 +428,24 @@ void SharedMemoryServer::DispatchMessages()
 	}
 }
 
-TopicService* SharedMemoryServer::OnCreateSubscription(const char* topicName)
+bool SharedMemoryServer::RemoveSubscription(const char* topicName)
+{
+	std::string name = topicName;
+	auto it = _topics.find(name);
+	if (it != _topics.end())
+	{
+		// we have found
+		delete it->second;
+		_topics.erase(it);
+
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+TopicService* SharedMemoryServer::CreateSubscription(const char* topicName)
 {
 	std::string key(topicName);
 	auto it = _topics.find(key);
@@ -375,8 +457,6 @@ TopicService* SharedMemoryServer::OnCreateSubscription(const char* topicName)
 	}
 	else
 	{
-		
-		shared_memory_object::remove(TopicService::ShmName(this->_chName, topicName).c_str());
 		auto result = new TopicService(this->_chName, topicName);
            
 		_topics.emplace(topicName, result);
@@ -387,16 +467,37 @@ TopicService* SharedMemoryServer::OnCreateSubscription(const char* topicName)
 
 SharedMemoryServer::SharedMemoryServer(const std::string& channel): _chName(channel), _messageQueue(open_or_create, channel.c_str(), 128, 512)
 {
-	std::thread([this]() { DispatchMessages(); }).detach();
+	this->dispatcher = std::thread([this]() { DispatchMessages(); });
 }
 
 SharedMemoryServer::~SharedMemoryServer()
 {
+	// exit command
+	ulong buffer[1];
+	buffer[0] = 0;
+	this->_messageQueue.send(buffer, sizeof(ulong), 0);
+
+	this->dispatcher.join();
+
 	for (const auto& t : _topics | std::views::values)
 		delete t;
-	    
+
+	// If there are no topics, we can safely remote communication channel.
+	if (_topics.empty())
+		message_queue::remove(this->_chName.c_str());
+
+	_topics.clear();
 }
 
+bool SharedMemoryServer::RemoveTopic(const std::string& topicName)
+{
+	RemoveSubscriptionEnvelope env;
+	env.Request.SetTopicName(topicName);
+
+	_messageQueue.send(&env, sizeof(RemoveSubscriptionEnvelope), 0);
+
+	return env.Response();
+}
 TopicService* SharedMemoryServer::CreateTopic(const std::string& topicName)
 {
 	CreateSubscriptionEnvelope env;

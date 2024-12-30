@@ -10,7 +10,9 @@ add_library(ZeroCopyRpc SHARED
     "ProcessUtils.cpp" "Random.cpp"
 )
 target_compile_definitions(ZeroCopyRpc PRIVATE BUILD_DLL)
-target_include_directories(ZeroCopyRpc PUBLIC include)
+
+target_include_directories(ZeroCopyRpc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 # Set C++ standard
 if (CMAKE_VERSION VERSION_GREATER 3.12)
     set_property(TARGET ZeroCopyRpc PROPERTY CXX_STANDARD 20)

@@ -11,6 +11,18 @@ using namespace boost::uuids;
 class TopicService;
 
 #pragma pack(push, 1)
+struct RemoveSubscription
+{
+    char TopicName[256];
+    inline void SetTopicName(const std::string& str)
+    {
+        strncpy_s(TopicName, str.c_str(), sizeof(TopicName) - 1);  // Leave room for null terminator
+    }
+    friend std::ostream& operator<<(std::ostream& os, const RemoveSubscription& obj)
+    {
+        return os << "Topic name: " << obj.TopicName;
+    }
+};
 struct CreateSubscription
 {
     char TopicName[256];
@@ -86,11 +98,12 @@ private:
 };
 struct HelloCommand
 {
-    std::chrono::time_point<std::chrono::steady_clock> Now = std::chrono::high_resolution_clock::now();
+    std::chrono::time_point<std::chrono::high_resolution_clock> Created = std::chrono::high_resolution_clock::now();
 };
 struct HelloResponse
 {
-    std::chrono::time_point<std::chrono::steady_clock> From;
+    std::chrono::time_point<std::chrono::high_resolution_clock> RequestCreated;
+
 };
 struct SubscribeResponse
 {
@@ -100,7 +113,7 @@ struct SubscribeResponse
 struct UnSubscribeCommand
 {
     // SubscribersTableIndex
-    byte Id;
+    byte SlothId;
     char TopicName[256];
     inline void SetTopicName(const std::string& str)
     {
@@ -110,6 +123,12 @@ struct UnSubscribeCommand
 struct UnSubscribeResponse
 {
     bool IsSuccess;
+    byte SlothId;
+    char TopicName[256];
+    inline void SetTopicName(const std::string& str)
+    {
+        strncpy_s(TopicName, str.c_str(), sizeof(TopicName) - 1);  // Leave room for null terminator
+    }
 };
 struct SubscribeCommand {
 
@@ -151,7 +170,12 @@ struct SubscriptionSharedData
     std::atomic<bool> PendingRemove;
     std::atomic<bool> Active;
     pid_t Pid;
-    void Reset(pid_t pid) { Pid = pid; Notified.store(0); Active.store(true); }
+    void Reset(pid_t pid) {
+        Pid = pid;
+    	Notified.store(0);
+    	Active.store(true);
+    	PendingRemove.store(false);
+    }
 };
 #pragma pack(pop)
 
@@ -162,6 +186,7 @@ typedef RequestEnvelope<UnSubscribeCommand, 6> UnSubscribeCommandEnvelope;
 typedef ResponseEnvelope<UnSubscribeResponse, 7> UnSubscribeResponseEnvelope;
 
 typedef RequestResponseEnvelope<CreateSubscription, 2, TopicService*> CreateSubscriptionEnvelope;
+typedef RequestResponseEnvelope<RemoveSubscription, 8, bool> RemoveSubscriptionEnvelope;
 
 typedef RequestEnvelope<HelloCommand, 3> HelloCommandEnvelope;
 typedef ResponseEnvelope<HelloResponse, 4> HelloResponseEnvelope;

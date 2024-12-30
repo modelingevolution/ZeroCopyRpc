@@ -22,12 +22,21 @@ public:
         {
             return (T*)(Buffer->_memory.Get(Item->Offset));
         }
+
         Accessor(const Accessor&) = delete;
         Accessor(Accessor&& other) noexcept : Item(other.Item), Buffer(other.Buffer) {
             other.Item = nullptr;
             other.Buffer = nullptr;
         }
-
+        Accessor& operator=(Accessor&& other) noexcept {
+            if (this != &other) {
+                Item = other.Item;
+                Buffer = other.Buffer;
+                other.Item = nullptr;
+                other.Buffer = nullptr;
+            }
+            return *this;
+        }
         Accessor(::CyclicBuffer<TSIZE, TCAPACITY>::Item* item, CyclicBuffer<TSIZE, TCAPACITY>* buffer)
             : Item(item),
             Buffer(buffer)
@@ -86,9 +95,12 @@ public:
         Cursor(const Cursor&) = delete;
         bool TryRead()
         {
+            std::cout << "CLIENT: TryRead, parent->nextIndex: " << _parent->_nextIndex << " Cursor.Index: " << Index << std::endl;
             auto diff = _parent->_nextIndex - Index;
             if (diff > 0)
             {
+                std::cout << "CLIENT: DIFF is positive, incrementing Index by 1." << std::endl;
+
                 Index += 1;
                 return true;
             }

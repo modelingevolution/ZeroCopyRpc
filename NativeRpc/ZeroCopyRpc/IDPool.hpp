@@ -5,82 +5,114 @@
 template <typename TId, unsigned int TSize>
 class IDPool {
 public:
-    // Constructor to initialize the pool with IDs from 0 to 255
     IDPool() : _head(nullptr) {
-        for (TId id = 0; id < TSize; ++id) {
-            _nodes[id].id = id;
-            _nodes[id].next = _head.load(std::memory_order_relaxed);
-            _head.store(&_nodes[id], std::memory_order_relaxed);
-        }
+        // Initialize in reverse order to maintain same complexity
+        unsigned int id = TSize;
+        do {
+            id = id - 1;
+            _nodes[id].id = static_cast<TId>(id);
+            _nodes[id].next = _head;
+            _head = &_nodes[id];
+        } while (id != 0);
+        // Memory fence to ensure visibility of initialization
+        std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 
     bool try_rent(const TId& target_id) {
-        Node* old_head = _head.load(std::memory_order_acquire);
+        if (target_id >= TSize) {
+            return false;
+        }
+
+        Node* current = _head.load(std::memory_order_acquire);
         Node* prev = nullptr;
 
-        while (old_head) {
-            // Look for the target ID in the free list
-            if (old_head->id == target_id) {
-                Node* next = old_head->next;
-
-                // If it's at the head of the list
+        while (current) {
+            if (current->id == target_id) {
                 if (prev == nullptr) {
-                    if (_head.compare_exchange_weak(old_head, next,
-                        std::memory_order_release, std::memory_order_relaxed)) {
+                    // If target is at head, try to update head
+                    Node* next = current->next;
+                    if (_head.compare_exchange_strong(current, next,
+                        std::memory_order_release,
+                        std::memory_order_relaxed)) {
                         return true;
                     }
+                    // If CAS failed, start over
+                    current = _head.load(std::memory_order_acquire);
+                    prev = nullptr;
+                    continue;
                 }
-                // If it's in the middle/end of the list
-                else {
-                    prev->next = next;
-                    return true;
+
+                // For nodes in the middle/end, use atomic marker
+                Node* next = current->next;
+                current->in_use.store(true, std::memory_order_release);
+
+                // Verify the list hasn't been modified
+                if (prev->next != current || current->next != next) {
+                    current->in_use.store(false, std::memory_order_release);
+                    current = _head.load(std::memory_order_acquire);
+                    prev = nullptr;
+                    continue;
                 }
+
+                prev->next = next;
+                return true;
             }
-            prev = old_head;
-            old_head = old_head->next;
+            prev = current;
+            current = current->next;
         }
         return false;
     }
-    // Allocate an ID from the pool
+
     bool rent(TId& id) {
-        Node* old_head = _head.load(std::memory_order_acquire);
-        while (old_head) {
+        Node* old_head;
+        while ((old_head = _head.load(std::memory_order_acquire)) != nullptr) {
             Node* next = old_head->next;
-            if (_head.compare_exchange_weak(old_head, next, std::memory_order_release, std::memory_order_relaxed)) {
+            if (_head.compare_exchange_strong(old_head, next,
+                std::memory_order_release,
+                std::memory_order_relaxed)) {
                 id = old_head->id;
+                old_head->in_use.store(true, std::memory_order_release);
                 return true;
             }
         }
-        return false; // No IDs available
+        return false;
     }
 
-    // Release an ID back to the pool
     void returns(TId id) {
         if (id >= TSize) {
-            throw std::out_of_range("ID out of range.");
+            throw std::out_of_range("ID out of range");
         }
+
         Node* node = &_nodes[id];
-        Node* old_head = _head.load(std::memory_order_acquire);
+
+        // Verify the ID wasn't already returned
+        bool expected = true;
+        if (!node->in_use.compare_exchange_strong(expected, false,
+            std::memory_order_release,
+            std::memory_order_relaxed)) {
+            throw std::runtime_error("ID already returned to pool");
+        }
+
+        Node* old_head;
         do {
+            old_head = _head.load(std::memory_order_acquire);
             node->next = old_head;
-        } while (!_head.compare_exchange_weak(old_head, node, std::memory_order_release, std::memory_order_relaxed));
+        } while (!_head.compare_exchange_weak(old_head, node,
+            std::memory_order_release,
+            std::memory_order_relaxed));
     }
 
-    // Check if the pool is empty
     bool empty() const {
         return _head.load(std::memory_order_acquire) == nullptr;
     }
 
 private:
-    // Node structure representing each ID
     struct Node {
         TId id;
         Node* next;
+        std::atomic<bool> in_use{ false };  // Track if node is currently rented
     };
 
-    // Atomic pointer to the head of the stack
     std::atomic<Node*> _head;
-
-    // Fixed-size array of nodes (one for each ID)
     Node _nodes[TSize];
 };
