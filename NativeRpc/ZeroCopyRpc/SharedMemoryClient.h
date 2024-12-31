@@ -109,7 +109,7 @@ public:
 
         std::string SemaphoreName() const;
 
-        CyclicBuffer<1024 * 1024 * 8, 256>::Accessor Read() const;
+        CyclicBuffer<1024 * 1024 * 8, 256>::Accessor Read() ;
         bool TryRead(CyclicBuffer<1024 * 1024 * 8, 256>::Accessor &a) const;
         SubscriptionCursor(const SubscriptionCursor& other) = delete;
 

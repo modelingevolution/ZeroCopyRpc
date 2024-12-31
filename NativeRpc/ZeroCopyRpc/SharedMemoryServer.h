@@ -106,11 +106,12 @@ public:
     inline std::string GetSubscriptionSemaphoreName(pid_t pid, int index) const;
 
     template<typename T, typename... Args>
-    void Publish(ulong type, Args&&... args) {
+    T* Publish(ulong type, Args&&... args) {
         auto scope = Prepare(sizeof(T), type);
         auto& span = scope.Span();
         auto ptr = new (span.Start) T(std::forward<Args>(args)...);
         span.Commit(sizeof(T));
+        return ptr;
     }
 
 

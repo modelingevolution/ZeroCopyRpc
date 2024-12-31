@@ -2,18 +2,20 @@
 #include "TypeDefs.h"
 #include "CyclicMemoryPool.hpp"
 #include "Export.h"
+#include <iostream>
+
 
 template<unsigned long TSIZE, unsigned long TCAPACITY>
-class EXPORT CyclicBuffer
+class  CyclicBuffer
 {
 public:
-    struct EXPORT Item
+    struct  Item
     {
         size_t Size;
         ulong Type;
         size_t Offset;
     };
-    struct EXPORT Accessor
+    struct  Accessor
     {
         Item* Item;
         CyclicBuffer* Buffer;
@@ -45,7 +47,7 @@ public:
 
         inline byte* Get() { return Buffer->_memory.Get(Item->Offset); }
     };
-    struct EXPORT WriterScope
+    struct  WriterScope
     {
         CyclicMemoryPool<TSIZE>::Span Span;
         unsigned long Type;
@@ -76,7 +78,10 @@ public:
         CyclicBuffer* _parent;
 
     };
-    struct EXPORT Cursor
+    /// <summary>
+    /// Cursor can act as a chaser. Once it's returned, it will yield data that will be written, not that had been written.
+    /// </summary>
+    struct Cursor
     {
         unsigned long Index;
         
@@ -95,11 +100,11 @@ public:
         Cursor(const Cursor&) = delete;
         bool TryRead()
         {
-            std::cout << "CLIENT: TryRead, parent->nextIndex: " << _parent->_nextIndex << " Cursor.Index: " << Index << std::endl;
+            //std::cout << "CLIENT: TryRead, parent->nextIndex: " << _parent->_nextIndex << " Cursor.Index: " << Index << std::endl;
             auto diff = _parent->_nextIndex - Index;
             if (diff > 0)
             {
-                std::cout << "CLIENT: DIFF is positive, incrementing Index by 1." << std::endl;
+                //std::cout << "CLIENT: DIFF is positive, incrementing Index by 1." << std::endl;
 
                 Index += 1;
                 return true;
@@ -122,6 +127,14 @@ public:
     {
         return ReadNext(_nextIndex);
     }
+    template<typename T, typename... Args>
+    void Write(ulong type, Args&&... args) {
+        static_assert(std::is_trivially_copyable_v<T>, "Type must be trivially copyable");
+        auto scope = this->WriteScope(sizeof(T), type);
+        auto& span = scope.Span;
+        auto ptr = new (span.Start) T(std::forward<Args>(args)...);
+        span.Commit(sizeof(T));
+    }
     Cursor ReadNext(ulong nextValue)
     {
         return Cursor(nextValue, this);
@@ -136,7 +149,7 @@ public:
         return _nextIndex;
     }
 private:
-    ulong _nextIndex = 0;
+    std::atomic<ulong> _nextIndex = 0;
 
     // We constantly check if there is enough memory in the CyclicMemoryPool for all the Items in the ring.
     std::atomic<ulong> _messageQueueItemsSize;
@@ -145,3 +158,4 @@ private:
     Item _items[TCAPACITY];
 
 };
+

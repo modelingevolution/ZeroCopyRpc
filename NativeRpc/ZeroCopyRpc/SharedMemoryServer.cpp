@@ -61,8 +61,8 @@ void TopicService::NotifyAll()
 			if (data.Notified.fetch_add(1) == 0)
 			{
 				// this is the first time, need to set the cursors index.
-				data.StartOffset = _buffer->NextIndex();
-				std::cout << "SERVER: Start offset set: " << data.StartOffset << std::endl;
+				data.NextIndex = _buffer->NextIndex();
+				std::cout << "SERVER: Start offset set: " << data.NextIndex << std::endl;
 			}
 
 			s.Sem->post();
@@ -120,28 +120,34 @@ void TopicService::RemoveDanglingSubscriptionEntry(int i, SubscriptionSharedData
 }
 bool TopicService::ClearIfExists(const std::string& channel_name, const std::string& topic_name)
 {
-	shared_memory_object shm(open_only, ShmName(channel_name, topic_name).c_str(), read_write);
-	offset_t size;
-	shm.get_size(size);
-	TopicMetadata m = {
-		sizeof(CyclicBuffer<1024 * 1024 * 8, 256>),
-		sizeof(SubscriptionSharedData) * 256 };
+	try {
+		shared_memory_object shm(open_only, ShmName(channel_name, topic_name).c_str(), read_write);
+		offset_t size;
+		shm.get_size(size);
+		TopicMetadata m = {
+			sizeof(CyclicBuffer<1024 * 1024 * 8, 256>),
+			sizeof(SubscriptionSharedData) * 256 };
 
-	if(size > 0)
-	{
-		if (size != m.TotalSize())
-			shm.truncate(m.TotalSize());
+		if (size > 0)
+		{
+			if (size != m.TotalSize())
+				shm.truncate(m.TotalSize());
 
-		mapped_region region(shm, read_write);
-		auto ptr = region.get_address();
-		memset(ptr, 0, size);
+			mapped_region region(shm, read_write);
+			auto ptr = region.get_address();
+			memset(ptr, 0, size);
 
-		TopicMetadata* metadata = (TopicMetadata*)ptr;
-		*metadata = m; // copy
-		region.flush();
-		return true;
+			TopicMetadata* metadata = (TopicMetadata*)ptr;
+			*metadata = m; // copy
+			region.flush();
+			return true;
+		}
+		return false;
 	}
-	return false;
+	catch (boost::interprocess::interprocess_exception &e)
+	{
+		return false;
+	}
 }
 TopicService::TopicService(const std::string& channel_name, const std::string& topic_name) :
 	_channelName(channel_name),

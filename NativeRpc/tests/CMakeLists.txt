@@ -5,7 +5,7 @@ cmake_minimum_required (VERSION 3.8)
 
 # Add the test executable
 add_executable(ZeroCopyRpcTests  "ConcurrentDictionaryTests.cpp" 
-"SharedMemoryServerTests.cpp" "IDPoolTests.cpp" "ConcurrentBugTests.cpp")
+"SharedMemoryServerTests.cpp" "IDPoolTests.cpp" "ConcurrentBugTests.cpp" "CyclicBufferTests.cpp" "SpinWaitTests.cpp"  "../ZeroCopyRpc/StopWatch.cpp" "../ZeroCopyRpc/StopWatch.h" "ThreadSpinTests.cpp" "StopWatchTests.cpp")
 
 # Link the test executable with gtest and the main library
 target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc)

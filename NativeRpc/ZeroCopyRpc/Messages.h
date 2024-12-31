@@ -165,7 +165,7 @@ struct TopicMetadata
 };
 struct SubscriptionSharedData
 {
-    ulong StartOffset;
+    ulong NextIndex;
     std::atomic<ulong> Notified;
     std::atomic<bool> PendingRemove;
     std::atomic<bool> Active;

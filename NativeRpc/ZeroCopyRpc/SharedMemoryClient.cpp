@@ -1,5 +1,7 @@
 #include "SharedMemoryClient.h"
 
+#include "ThreadSpin.h"
+
 
 void SharedMemoryClient::Callback::On(void* msg) const
 {
@@ -174,8 +176,7 @@ SharedMemoryClient::Topic* SharedMemoryClient::GetOrCreate(const std::string& to
 SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(byte sloth, Topic* topic): _sem(nullptr), _sloth(sloth), _topic(topic), _cursor(nullptr)
 {
 	_sem = new named_semaphore(open_only, SemaphoreName().c_str());
-	auto value = _topic->Subscribers[sloth].StartOffset; // this should the value from shared memory.
-	_cursor = new CyclicBuffer<1024 * 1024 * 8, 256>::Cursor(_topic->SharedBuffer->ReadNext(value)); // move ctor.
+	
 	_topic->_openCursorClientCount.fetch_add(1);
 	_topic->_openCursorServerCount.fetch_add(1);
 	_topic->_openSlots.push_back(sloth);
@@ -188,24 +189,40 @@ std::string SharedMemoryClient::SubscriptionCursor::SemaphoreName() const
 	return oss.str();
 }
 
-CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCursor::Read() const
+CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCursor::Read()
 {
+	/*while (!_sem->try_wait())
+		ThreadSpin::Wait(100);*/
 	_sem->wait();
-	if (_cursor->TryRead())
-		return _cursor->Data();
-	else throw std::exception("TryRead returned false.");
+	if(_cursor == nullptr)
+	{
+		auto value = _topic->Subscribers[_sloth].NextIndex; // this should the value from shared memory.
+		_cursor = new CyclicBuffer<1024 * 1024 * 8, 256>::Cursor(_topic->SharedBuffer->ReadNext(value)); // move ctor.
+	}
+	for(int i = 0; i < 10; i++)
+	{
+		if(_cursor->TryRead())
+			return _cursor->Data();
+		ThreadSpin::Wait(100);
+		std::cout << "Data in SHM not yet ready.\n";
+	}
+	throw std::exception("TryRead returned false.");
 }
 bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer<1024 * 1024 * 8, 256>::Accessor &a) const
 {
 	if (!_sem->try_wait())
 		return false;
 
-	if (_cursor->TryRead())
+	for (int i = 0; i < 10; i++)
 	{
-		a = std::move(_cursor->Data());
-		return true;
+		if (_cursor->TryRead())
+		{
+			a = std::move(_cursor->Data());
+			return true;
+		}
+		ThreadSpin::Wait(100);
 	}
-	else throw std::exception("TryRead returned false.");
+	throw std::exception("TryRead returned false.");
 }
 SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(SubscriptionCursor&& other) noexcept: _sem(other._sem),
 	_sloth(other._sloth),

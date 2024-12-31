@@ -18,6 +18,15 @@ bool is_process_running(pid_t pid) {
     CloseHandle(process);
     return running;
 }
+
+void spinWait(int cycles)
+{
+	for (int i = 0; i < cycles; ++i) {
+		// Use PAUSE to reduce power consumption on x86/x64
+		// This intrinsic is available for MSVC and GCC with -msse2 flag
+		_mm_pause();
+	}
+}
 #else
 
 bool is_process_running(boost::process::pid_t pid) {
