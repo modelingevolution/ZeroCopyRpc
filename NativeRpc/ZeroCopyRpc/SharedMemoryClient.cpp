@@ -203,8 +203,8 @@ CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCur
 	{
 		if(_cursor->TryRead())
 			return _cursor->Data();
-		ThreadSpin::Wait(100);
-		std::cout << "Data in SHM not yet ready.\n";
+		ThreadSpin::Wait(200);
+		//std::cout << "Data in SHM not yet ready.\n";
 	}
 	throw std::exception("TryRead returned false.");
 }

@@ -366,8 +366,9 @@ TEST_F(SharedMemoryServerTest, HighPrecisionProducerConsumerPerformance) {
 	auto accessor = cursor->Read();
 	const auto consumer_start = std::chrono::high_resolution_clock::now();
 
+	bool r = true;
 	while (std::chrono::high_resolution_clock::now() < consumer_start + std::chrono::seconds(5)) {
-		if (accessor.Item != nullptr) {
+		if (r) {
 			auto msg = accessor.As<PerformanceMessage>();
 			auto consume_time = std::chrono::high_resolution_clock::now();
 
@@ -382,7 +383,7 @@ TEST_F(SharedMemoryServerTest, HighPrecisionProducerConsumerPerformance) {
 			metrics.messages_consumed.fetch_add(1);
 		}
 
-		cursor->TryRead(accessor);
+		r = cursor->TryRead(accessor);
 	}
 
 	producer.join();
