@@ -1,7 +1,7 @@
 #pragma once
 #include <atomic>
 #include <chrono>
-#include <export.h>
+#include <Export.h>
 
 class EXPORT ThreadSpin {
 public:
