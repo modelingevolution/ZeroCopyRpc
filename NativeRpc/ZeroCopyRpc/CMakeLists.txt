@@ -23,11 +23,15 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
     set_property(TARGET ZeroCopyRpc PROPERTY CXX_STANDARD 20)
 endif()
 
+message(STATUS "Current folder path: ${CMAKE_CURRENT_SOURCE_DIR}")
+
+
 # Set Boost root directory
-set(BOOST_ROOT "external/boost")
+set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../external/boost")
 
 # Include the Boost directory
-include_directories("${BOOST_ROOT}/boost")
+include_directories("${BOOST_ROOT}")
+
 message("BOOST HEADER DIR: ${BOOST_ROOT}")
 
 # Find Boost libraries (set required components)
