@@ -6,5 +6,5 @@
 #ifdef WIN32
 
 #else
-error_t strncpy_s(char* dest, const char* src, size_t destsz);
+int strncpy_s(char* dest, const char* src, size_t destsz);
 #endif
