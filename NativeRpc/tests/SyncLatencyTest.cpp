@@ -93,7 +93,7 @@ TEST_F(SyncLatencyTest, NamedSemaphoreLatency) {
         for (int i = 0; i < TOTAL_ITEMS && !should_stop; ++i) {
             latencies[i] = get_time_us();
             ReleaseSemaphore(hSemaphore, 1, NULL);
-            sw.Wait(std::chrono::milliseconds(1000 / FREQUENCY_HZ));
+            sw.WaitFor(std::chrono::milliseconds(1000 / FREQUENCY_HZ));
         }
         });
 
@@ -217,7 +217,7 @@ TEST_F(SyncLatencyTest, BoostNamedSemaphoreLatency) {
         for (int i = 0; i < TOTAL_ITEMS && !should_stop; ++i) {
             latencies[i] = get_time_us();
             semaphore.post(); // Signal the semaphore
-            sw.Wait(std::chrono::milliseconds(1000 / FREQUENCY_HZ));
+            sw.WaitFor(std::chrono::milliseconds(1000 / FREQUENCY_HZ));
         }
         });
     auto consumer = std::thread([&]() {
@@ -257,7 +257,7 @@ TEST_F(SyncLatencyTest, MeNamedSemaphoreLatency) {
         for (int i = 0; i < TOTAL_ITEMS && !should_stop; ++i) {
             latencies[i] = get_time_us();
             semaphore.Release(); // Signal the semaphore
-            sw.Wait(std::chrono::milliseconds(1000 / FREQUENCY_HZ));
+            sw.WaitFor(std::chrono::milliseconds(1000 / FREQUENCY_HZ));
         }
         });
     auto consumer = std::thread([&]() {
@@ -303,7 +303,7 @@ TEST_F(SyncLatencyTest, NamedEventLatency) {
         for (int i = 0; i < TOTAL_ITEMS && !should_stop; ++i) {
             latencies[i] = get_time_us();
             SetEvent(hEvent);
-            sw.Wait(std::chrono::milliseconds(1000 / FREQUENCY_HZ));
+            sw.WaitFor(std::chrono::milliseconds(1000 / FREQUENCY_HZ));
         }
         });
 

@@ -22,7 +22,7 @@ TEST_F(ThreadSpinTest, WaitRespectsDuration) {
     auto target_duration = std::chrono::milliseconds(1);
     auto start = std::chrono::steady_clock::now();
 
-    spinner.Wait(target_duration);
+    spinner.WaitFor(target_duration);
 
     auto actual_duration = std::chrono::steady_clock::now() - start;
     auto duration_ms = std::chrono::duration_cast<std::chrono::nanoseconds>(actual_duration).count();
@@ -36,7 +36,7 @@ TEST_F(ThreadSpinTest, WaitDoesNotUnderrun) {
     auto target_duration = std::chrono::milliseconds(5);
     auto start = std::chrono::steady_clock::now();
 
-    spinner.Wait(target_duration);
+    spinner.WaitFor(target_duration);
 
     auto actual_duration = std::chrono::steady_clock::now() - start;
     EXPECT_GE(actual_duration, target_duration);
@@ -44,7 +44,7 @@ TEST_F(ThreadSpinTest, WaitDoesNotUnderrun) {
 
 TEST_F(ThreadSpinTest, HandlesZeroDuration) {
     auto start = std::chrono::steady_clock::now();
-    spinner.Wait(std::chrono::milliseconds(0));
+    spinner.WaitFor(std::chrono::milliseconds(0));
     auto duration = std::chrono::steady_clock::now() - start;
 
     EXPECT_LT(duration, std::chrono::milliseconds(1));
@@ -54,7 +54,7 @@ TEST_F(ThreadSpinTest, HandlesSmallDurations) {
     auto target_duration = std::chrono::microseconds(100);
     auto start = std::chrono::steady_clock::now();
 
-    spinner.Wait(target_duration);
+    spinner.WaitFor(target_duration);
 
     auto actual_duration = std::chrono::steady_clock::now() - start;
     EXPECT_GE(actual_duration, target_duration);
@@ -71,7 +71,7 @@ TEST_F(ThreadSpinTest, MultipleConcurrentSpinners) {
         threads.emplace_back([i, target_duration, &durations] {
             ThreadSpin local_spinner;
             auto start = std::chrono::steady_clock::now();
-            local_spinner.Wait(target_duration);
+            local_spinner.WaitFor(target_duration);
             durations[i] = std::chrono::steady_clock::now() - start;
             });
     }

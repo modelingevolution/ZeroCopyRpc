@@ -7,10 +7,10 @@ class EXPORT ThreadSpin {
 public:
     ThreadSpin();
 
-    static void Wait(int cycles);
+    static void Wait(uint64_t cycles);
 
     template<typename Duration>
-    void Wait(Duration duration) {
+    void WaitFor(Duration duration) {
         // we don't have to use steady-clock here. 
         auto target = std::chrono::high_resolution_clock::now() + duration;
 
@@ -28,7 +28,7 @@ public:
 private:
     std::atomic<double> ns_per_cycle;
 
-    void OnWait(int cycles);
+    void OnWait(uint64_t cycles);
 
     static double Calibrate();
 };

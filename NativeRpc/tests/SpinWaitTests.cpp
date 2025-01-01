@@ -2,8 +2,10 @@
 #include <chrono>
 #include <iostream>
 #include "ProcessUtils.h" // Include the header where spinWait is declared
+#include "ThreadSpin.h"
 
-TEST(SpinWaitTest, MeasureCycleDuration) {
+TEST(SpinWaitTest, MeasureCycleDuration)
+{
     const int total_duration_ms = 1000; // Test will run for 1 second
     const int min_cycles_per_test = 100; // Minimum cycles to spin for per iteration
     const int cycles_per_test = 1000;    // For the 1000 cycles test
@@ -15,7 +17,7 @@ TEST(SpinWaitTest, MeasureCycleDuration) {
     // Measure 100 cycles over 1 second
     start = std::chrono::high_resolution_clock::now();
     while (true) {
-        spinWait(min_cycles_per_test);  // 100 cycles
+        ThreadSpin::Wait(min_cycles_per_test);  // 100 cycles
         iterations_min_cycles++;
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count();
@@ -38,7 +40,7 @@ TEST(SpinWaitTest, MeasureCycleDuration) {
 
     // Measure 1000 cycles over 1 second
     while (true) {
-        spinWait(cycles_per_test);  // 1000 cycles
+        ThreadSpin::Wait(cycles_per_test);  // 1000 cycles
         iterations_thousand_cycles++;
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count();

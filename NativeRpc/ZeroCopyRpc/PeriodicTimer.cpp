@@ -34,7 +34,7 @@ bool PeriodicTimer::WaitUntil(std::chrono::steady_clock::time_point target)
 	}
 
 	if (remaining > std::chrono::nanoseconds(0)) {
-		_spin.Wait(remaining);
+		_spin.WaitFor(remaining);
 	}
 
 	return true;
