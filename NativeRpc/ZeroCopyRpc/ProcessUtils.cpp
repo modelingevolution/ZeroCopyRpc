@@ -27,7 +27,7 @@ inline uint64_t get_cycles(void) {
     return cycles;
 }
 #endif
-void spinWait(uint64_t cycles)
+void EXPORT spinWait(uint64_t cycles)
 {
 #if defined(__aarch64__)
     uint64_t start = get_cycles();

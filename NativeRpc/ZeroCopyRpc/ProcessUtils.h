@@ -20,4 +20,4 @@ bool EXPORT is_process_running(pid_t pid);
 #include <atomic>
 #endif
 
-void EXPORT spinWait(uint64_t cycles);
+extern "C" void EXPORT spinWait(uint64_t cycles);
