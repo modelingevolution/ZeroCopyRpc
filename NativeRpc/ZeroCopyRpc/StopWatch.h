@@ -8,7 +8,7 @@
 #include <chrono>
 #include <optional>
 #include <stdexcept>
-#include <export.h>
+#include <Export.h>
 
 class EXPORT StopWatch {
 public:
