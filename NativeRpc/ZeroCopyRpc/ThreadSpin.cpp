@@ -1,4 +1,5 @@
 #include "ThreadSpin.h"
+#include "ProcessUtils.h"
 
 ThreadSpin::ThreadSpin(): ns_per_cycle(Calibrate())
 {
@@ -6,16 +7,14 @@ ThreadSpin::ThreadSpin(): ns_per_cycle(Calibrate())
 }
 void ThreadSpin::Wait(int cycles)
 {
-    for (int i = 0; i < cycles; ++i) {
-        _mm_pause();
-    }
+    spinWait(cycles);
 
 }
 void ThreadSpin::OnWait(int cycles)
 {
     auto start = std::chrono::steady_clock::now();
 
-    ThreadSpin::Wait(cycles);
+    spinWait(cycles);
 
     if (cycles > 100) {
         auto elapsed = std::chrono::steady_clock::now() - start;

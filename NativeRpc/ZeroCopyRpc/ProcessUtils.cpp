@@ -18,14 +18,29 @@ bool is_process_running(pid_t pid) {
     CloseHandle(process);
     return running;
 }
-
-void spinWait(int cycles)
+#if defined(__aarch64__)
+inline uint64_t get_cycles(void) {
+    uint64_t cycles;
+#if defined(__aarch64__)
+    asm volatile("mrs %0, cntvct_el0" : "=r" (cycles));
+#endif
+    return cycles;
+}
+#endif
+void spinWait(uint64_t cycles)
 {
-	for (int i = 0; i < cycles; ++i) {
+#if defined(__aarch64__)
+    uint64_t start = get_cycles();
+    while (get_cycles() - start < cycles) {
+        asm volatile("isb" ::: "memory");
+    }
+#else
+	for (uint64_t i = 0; i < cycles; ++i) {
 		// Use PAUSE to reduce power consumption on x86/x64
 		// This intrinsic is available for MSVC and GCC with -msse2 flag
 		_mm_pause();
 	}
+#endif
 }
 #else
 

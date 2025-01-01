@@ -11,7 +11,13 @@ typedef DWORD pid_t;
 
 pid_t EXPORT getCurrentProcessId();
 bool EXPORT is_process_running(pid_t pid);
+
+#if defined(__aarch64__)
+#include <stdint.h>
+
+#else
 #include <intrin.h> // For _mm_pause
 #include <atomic>
+#endif
 
-void EXPORT spinWait(int cycles);
+void EXPORT spinWait(uint64_t cycles);
