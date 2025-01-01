@@ -5,12 +5,14 @@
 
 #include "CyclicBuffer.hpp"
 
+const unsigned long BUFFER_SIZE = 1024;
+const unsigned long CAPACITY = 16;
+
 template class CyclicBuffer<1024, 16>;
+
 
 class CyclicBufferTest : public ::testing::Test {
 protected:
-    static const unsigned long BUFFER_SIZE = 1024;
-    static const unsigned long CAPACITY = 16;
 
     CyclicBuffer<1024, 16> buffer;
 };
@@ -295,19 +297,19 @@ TEST_F(CyclicBufferTest, RemainingWithWrapAround) {
     auto cursor = buffer.ReadNext();
 
     // Fill buffer to capacity
-    for (int i = 0; i < CyclicBufferTest::CAPACITY; i++) {
+    for (int i = 0; i < CAPACITY; i++) {
         buffer.Write<int>(TYPE, i);
     }
 
-    ASSERT_EQ(cursor.Remaining(), CyclicBufferTest::CAPACITY);
+    ASSERT_EQ(cursor.Remaining(), CAPACITY);
 
     // Read half
-    const int READ_COUNT = CyclicBufferTest::CAPACITY / 2;
+    const int READ_COUNT = CAPACITY / 2;
     for (int i = 0; i < READ_COUNT; i++) {
         ASSERT_TRUE(cursor.TryRead());
     }
 
-    ASSERT_EQ(cursor.Remaining(), CyclicBufferTest::CAPACITY - READ_COUNT);
+    ASSERT_EQ(cursor.Remaining(),CAPACITY - READ_COUNT);
 
     // Write more data causing wrap-around
     const int ADDITIONAL_WRITES = 3;
@@ -316,7 +318,7 @@ TEST_F(CyclicBufferTest, RemainingWithWrapAround) {
     }
 
     // Should show remaining unread items plus new items
-    ASSERT_EQ(cursor.Remaining(), (CyclicBufferTest::CAPACITY - READ_COUNT) + ADDITIONAL_WRITES);
+    ASSERT_EQ(cursor.Remaining(), (CAPACITY - READ_COUNT) + ADDITIONAL_WRITES);
 }
 
 TEST_F(CyclicBufferTest, RemainingAfterZeroSizedWrites) {
