@@ -44,7 +44,7 @@ void spinWait(uint64_t cycles)
 }
 #else
 
-bool is_process_running(boost::process::pid_t pid) {
+bool is_process_running(pid_t pid) {
     // Send signal 0 to check if the process exists
     return (kill(pid, 0) == 0);
 }
