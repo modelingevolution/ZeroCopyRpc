@@ -1,6 +1,7 @@
 ﻿#include "SharedMemoryServer.h"
 #include "SharedMemoryServer.h"
 #include "ProcessUtils.h"
+#include "ZeroCopyRpcException.h"
 
 template class CyclicBuffer<1024 * 1024 * 8, 256>;
 template class CyclicMemoryPool<8388608>;
@@ -209,7 +210,7 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 						byte index = static_cast<byte>(i);
 						// We need to rebuild the subscription entry.
 						if (!this->_idPool.try_rent(index))
-							throw std::exception("Cannot rebuild subscription.");
+							throw ZeroCopyRpcException("Cannot rebuild subscription.");
 
 						Subscription s;
 						s.OpenOrCreate(GetSubscriptionSemaphoreName(sub.Pid, i), index);
@@ -235,7 +236,7 @@ byte TopicService::Subscribe(pid_t pid)
 {
 	byte index = 0;
 	if (!this->_idPool.rent(index))
-		throw std::exception("Cannot find free id.");
+		throw ZeroCopyRpcException("Cannot find free id.");
 
 	auto& item = this->_subscribers[index];
 	item.Reset(pid);

@@ -1,6 +1,7 @@
 #include "SharedMemoryClient.h"
 
 #include "ThreadSpin.h"
+#include "ZeroCopyRpcException.h"
 
 
 void SharedMemoryClient::Callback::On(void* msg) const
@@ -206,7 +207,7 @@ CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCur
 		ThreadSpin::Wait(200);
 		//std::cout << "Data in SHM not yet ready.\n";
 	}
-	throw std::exception("TryRead returned false.");
+	throw ZeroCopyRpcException("TryRead returned false.");
 }
 bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer<1024 * 1024 * 8, 256>::Accessor &a) const
 {
@@ -222,7 +223,7 @@ bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer<1024 * 1024 * 
 		}
 		ThreadSpin::Wait(100);
 	}
-	throw std::exception("TryRead returned false.");
+	throw ZeroCopyRpcException("TryRead returned false.");
 }
 SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(SubscriptionCursor&& other) noexcept: _sem(other._sem),
 	_sloth(other._sloth),

@@ -13,6 +13,7 @@
 #include "PeriodicTimer.h"
 #include "StopWatch.h"
 #include "ThreadSpin.h"
+#include "ZeroCopyRpcException.h"
 
 using namespace std::chrono;
 using namespace std;
@@ -209,7 +210,7 @@ private:
 		uuid result;
 		memcpy(&result, &digest, sizeof(digest));
 		if (sizeof(digest) != sizeof(uuid))
-			throw std::exception("Fuck");
+			throw ZeroCopyRpcException("Fuck");
 		return result;
 	}
 };
