@@ -35,6 +35,15 @@ find_package(Boost REQUIRED COMPONENTS filesystem system)
 # Link Boost libraries
 target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system)
 
+if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
+    # MSVC-specific flags
+    
+else()
+    # GCC/Clang flags
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
+endif()
+
 # Create an executable that uses the shared library
 add_executable(ZeroCopyRpcExecutable
     "Program.cpp" 
