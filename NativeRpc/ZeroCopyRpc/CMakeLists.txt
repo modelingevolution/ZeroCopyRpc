@@ -28,7 +28,7 @@ set(BOOST_ROOT "../external/boost")
 
 # Include the Boost directory
 include_directories("${BOOST_ROOT}/boost")
-message("BOOST HEADER DIR: ${BOOST_ROOT}/boost")
+message("BOOST HEADER DIR: ${BOOST_ROOT}")
 
 # Find Boost libraries (set required components)
 find_package(Boost REQUIRED COMPONENTS filesystem system)
