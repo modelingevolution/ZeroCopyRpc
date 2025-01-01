@@ -8,7 +8,7 @@ unsigned long Random::NextUlong()
     // Use a Mersenne Twister engine for generating random numbers
     std::mt19937_64 gen(rd());
     // Define the range for unsigned long
-    std::uniform_int_distribution<unsigned long> dist(0, ULONG_MAX);
+    std::uniform_int_distribution<unsigned long> dist(0, 0xffffffffUL);
     // Generate a random unsigned long
     unsigned long randomValue = dist(gen);
     return randomValue;
