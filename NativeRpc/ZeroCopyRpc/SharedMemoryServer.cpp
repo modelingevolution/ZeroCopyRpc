@@ -340,7 +340,7 @@ message_queue* SharedMemoryServer::GetClient(pid_t pid)
 	return m;
 }
 
-void SharedMemoryServer::OnHelloResponse(pid_t pid, std::chrono::time_point<std::chrono::steady_clock> now,
+void SharedMemoryServer::OnHelloResponse(pid_t pid, std::chrono::time_point<std::chrono::high_resolution_clock> now,
 	const uuid& correlationId)
 {
 	message_queue* m = GetClient(pid);

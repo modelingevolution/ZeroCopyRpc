@@ -158,7 +158,7 @@ private:
 
     message_queue* GetClient(pid_t pid);
 
-    void OnHelloResponse(pid_t pid, std::chrono::time_point<std::chrono::steady_clock> now, const uuid &correlationId);
+    void OnHelloResponse(pid_t pid, std::chrono::time_point<std::chrono::high_resolution_clock> now, const uuid &correlationId);
 
     void DispatchMessages();
     
