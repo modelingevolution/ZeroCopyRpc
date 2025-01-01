@@ -298,6 +298,7 @@ TEST_F(SyncLatencyTest, MeNamedSemaphoreLatency) {
     EXPECT_GT(stats.avg, 0);
     EXPECT_LT(stats.avg, 10000); // Expected latency under 1ms
 }
+#ifdef _WIN32
 TEST_F(SyncLatencyTest, NamedEventLatency) {
     HANDLE hEvent = CreateEventA(
         NULL,     // default security attributes
@@ -347,3 +348,4 @@ TEST_F(SyncLatencyTest, NamedEventLatency) {
     EXPECT_GT(stats.avg, 0);
     EXPECT_LT(stats.avg, 1000); // Expected latency under 1ms
 }
+#endif
