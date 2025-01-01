@@ -8,7 +8,7 @@ add_library(ZeroCopyRpc SHARED
     "Messages.h" "Random.h"
     "SharedMemoryClient.h" "SharedMemoryClient.cpp"
     "ProcessUtils.cpp" "Random.cpp"
- "TypeDefs.cpp" "ThreadSpin.h" "ThreadSpin.cpp" "PeriodicTimer.h" "PeriodicTimer.cpp" "NamedSemaphore.h" "NamedSemaphore.cpp")
+ "TypeDefs.cpp" "ThreadSpin.h" "ThreadSpin.cpp" "PeriodicTimer.h" "PeriodicTimer.cpp" "NamedSemaphore.h" "NamedSemaphore.cpp" "CrossPlatform.h" "CrossPlatform.cpp")
 target_compile_definitions(ZeroCopyRpc PRIVATE BUILD_DLL)
 
 target_include_directories(ZeroCopyRpc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
