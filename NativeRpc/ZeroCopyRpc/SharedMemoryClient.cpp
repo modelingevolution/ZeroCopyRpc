@@ -175,7 +175,7 @@ SharedMemoryClient::Topic* SharedMemoryClient::GetOrCreate(const std::string& to
 
 SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(byte sloth, Topic* topic): _sem(nullptr), _sloth(sloth), _topic(topic), _cursor(nullptr)
 {
-	_sem = new named_semaphore(open_only, SemaphoreName().c_str());
+	_sem = new NamedSemaphore( SemaphoreName(), NamedSemaphore::OpenMode::Open);
 	
 	_topic->_openCursorClientCount.fetch_add(1);
 	_topic->_openCursorServerCount.fetch_add(1);
@@ -193,7 +193,7 @@ CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCur
 {
 	/*while (!_sem->try_wait())
 		ThreadSpin::Wait(100);*/
-	_sem->wait();
+	_sem->Acquire();
 	if(_cursor == nullptr)
 	{
 		auto value = _topic->Subscribers[_sloth].NextIndex; // this should the value from shared memory.
@@ -210,7 +210,7 @@ CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCur
 }
 bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer<1024 * 1024 * 8, 256>::Accessor &a) const
 {
-	if (!_sem->try_wait())
+	if (!_sem->TryAcquire())
 		return false;
 
 	for (int i = 0; i < 10; i++)
@@ -249,7 +249,7 @@ SharedMemoryClient::SubscriptionCursor::~SubscriptionCursor()
 		this->_topic->Unsubscribe(this->_sloth);
 		delete _sem;
 		delete _cursor;
-		named_semaphore::remove(SemaphoreName().c_str());
+		NamedSemaphore::Remove(SemaphoreName());
 		_sem = nullptr;
 		_cursor = nullptr;
 		_topic = nullptr;

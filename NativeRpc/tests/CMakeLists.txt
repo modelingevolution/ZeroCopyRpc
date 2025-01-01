@@ -5,7 +5,9 @@ cmake_minimum_required (VERSION 3.8)
 
 # Add the test executable
 add_executable(ZeroCopyRpcTests  "ConcurrentDictionaryTests.cpp" 
-"SharedMemoryServerTests.cpp" "IDPoolTests.cpp" "ConcurrentBugTests.cpp" "CyclicBufferTests.cpp" "SpinWaitTests.cpp"  "../ZeroCopyRpc/StopWatch.cpp" "../ZeroCopyRpc/StopWatch.h" "ThreadSpinTests.cpp" "StopWatchTests.cpp")
+"SharedMemoryServerTests.cpp" "IDPoolTests.cpp" "ConcurrentBugTests.cpp" "CyclicBufferTests.cpp" 
+"SpinWaitTests.cpp"  "../ZeroCopyRpc/StopWatch.cpp" "../ZeroCopyRpc/StopWatch.h" "ThreadSpinTests.cpp" 
+"StopWatchTests.cpp" "SyncLatencyTest.cpp" )
 
 # Link the test executable with gtest and the main library
 target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc)
@@ -24,11 +26,22 @@ enable_testing()
 add_test(NAME ZeroCopyRpcTests COMMAND ZeroCopyRpcTests)
 
 # Add compiler-specific flags if needed
-if(MSVC)
-    target_compile_options(ZeroCopyRpcTests PRIVATE /W4)
-else()
-    target_compile_options(ZeroCopyRpcTests PRIVATE -Wall -Wextra)
-endif()
+
+if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
+    message("Setting flags for MSVC")
+    string(REPLACE "/W3" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    target_compile_options(ZeroCopyRpcTests PRIVATE
+        $<$<CONFIG:Debug>:/Od /Zi /RTC1>
+        $<$<CONFIG:Release>:/O2 /Ob2 /Oi /Ot /GL>
+    )
+    # Enable parallel compilation for MSVC
+    target_compile_options(ZeroCopyRpcTests PRIVATE /MP)
+ else()
+     target_compile_options(ZeroCopyRpcTests PRIVATE
+         $<$<CONFIG:Debug>:-Wall -Wextra -g -O0>
+         $<$<CONFIG:Release>:-O3 -march=native>
+     )
+ endif()
 
  message("CMAKE_BINARY_DIR:        ${CMAKE_BINARY_DIR}/bin/ZeroCopyRpc.dll")
  message("Target output directory: ${CMAKE_BINARY_DIR}/tests")

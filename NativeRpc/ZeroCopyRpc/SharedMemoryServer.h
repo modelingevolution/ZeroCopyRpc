@@ -26,6 +26,8 @@
 #include <thread>
 #include <future>
 #include <ranges>
+
+#include "NamedSemaphore.h"
 #ifdef WIN32
 #include <windows.h>
 typedef DWORD pid_t;
@@ -83,7 +85,7 @@ class EXPORT TopicService {
 public:
     struct Subscription
     {
-        named_semaphore* Sem = nullptr;
+        NamedSemaphore* Sem = nullptr;
         int Index = -1;
         std::string* Name = nullptr;
         Subscription();

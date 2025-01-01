@@ -13,7 +13,21 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+
+message(STATUS "CMake CXX Compiler: ${CMAKE_CXX_COMPILER}")
+message(STATUS "CMake CXX Compiler ID: ${CMAKE_CXX_COMPILER_ID}")
+
+if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
+    # MSVC-specific flags
+    message("Setting flags for MSVC")
+    string(REPLACE "/W3" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /RTC1 /MDd /D_DEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /Oi /Ot /GL /DNDEBUG /MD")
+else()
+    # GCC/Clang flags
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native")
+endif()
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 

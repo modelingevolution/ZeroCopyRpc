@@ -14,7 +14,7 @@ void TopicService::Subscription::OpenOrCreate(const std::string& semName, byte i
 	}
 
 	this->Name = new std::string(semName);
-	this->Sem = new named_semaphore(open_or_create, semName.c_str(), 0);
+	this->Sem = new NamedSemaphore(semName, NamedSemaphore::OpenMode::OpenOrCreate, 0);
 	this->Index = index;
 	std::cout << "named semaphore created: " << semName << std::endl;
 }
@@ -22,7 +22,7 @@ void TopicService::Subscription::OpenOrCreate(const std::string& semName, byte i
 TopicService::Subscription::Subscription(const std::string& semName, byte index): Sem(nullptr), Name(nullptr)
 {
 	this->Name = new std::string(semName);
-	this->Sem = new named_semaphore(create_only, semName.c_str(),0);
+	this->Sem = new NamedSemaphore( semName, NamedSemaphore::OpenMode::Create, 0);
 	this->Index = index;
 	std::cout << "named semaphore created: " << semName << std::endl;
 }
@@ -30,7 +30,7 @@ TopicService::Subscription::Subscription(const std::string& semName, byte index)
 void TopicService::Subscription::Close()
 {
 	if (Sem != nullptr)
-		named_semaphore::remove(Name->c_str());
+		NamedSemaphore::Remove(*Name);
 	delete Sem;
 	delete Name;
 	Name = nullptr;
@@ -65,7 +65,7 @@ void TopicService::NotifyAll()
 				std::cout << "SERVER: Start offset set: " << data.NextIndex << std::endl;
 			}
 
-			s.Sem->post();
+			s.Sem->Release();
 		}
             
 	}
@@ -115,7 +115,7 @@ PublishScope::~PublishScope()
 void TopicService::RemoveDanglingSubscriptionEntry(int i, SubscriptionSharedData& sub) const
 {
 	auto semName = GetSubscriptionSemaphoreName(sub.Pid, i);
-	named_semaphore::remove(semName.c_str());
+	NamedSemaphore::Remove(semName);
 	sub.PendingRemove.store(false);
 }
 bool TopicService::ClearIfExists(const std::string& channel_name, const std::string& topic_name)

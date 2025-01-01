@@ -31,6 +31,7 @@
 #include "Random.h"
 #include "ProcessUtils.h"
 #include "Export.h"
+#include "NamedSemaphore.h"
 using namespace boost::interprocess;
 using namespace boost::uuids;
 
@@ -123,7 +124,7 @@ public:
         ~SubscriptionCursor();
 
     private:
-        named_semaphore* _sem;
+        NamedSemaphore* _sem;
         byte _sloth;
         Topic* _topic;
         CyclicBuffer<1024 * 1024 * 8, 256>::Cursor* _cursor;
