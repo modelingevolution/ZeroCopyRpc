@@ -146,7 +146,7 @@ TEST_F(SyncLatencyTest, NamedSemaphoreLatencyLinux) {
         for (int i = 0; i < TOTAL_ITEMS && !should_stop; ++i) {
             latencies[i] = get_time_us();
             semaphore.post();
-            sw.Wait(std::chrono::milliseconds(1000) / FREQUENCY_HZ);
+            sw.WaitFor(std::chrono::milliseconds(1000) / FREQUENCY_HZ);
         }
         });
 
@@ -187,7 +187,7 @@ TEST_F(SyncLatencyTest, EventFdLatency) {
         for (int i = 0; i < TOTAL_ITEMS && !should_stop; ++i) {
             latencies[i] = get_time_us();
             write(efd, &increment, sizeof(increment));
-            sw.Wait(std::chrono::milliseconds(1000) / FREQUENCY_HZ);
+            sw.WaitFor(std::chrono::milliseconds(1000) / FREQUENCY_HZ);
         }
         });
 
