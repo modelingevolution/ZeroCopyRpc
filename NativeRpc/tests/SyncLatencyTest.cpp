@@ -14,12 +14,20 @@
 #include <sys/eventfd.h>
 #include <unistd.h>
 #include <fcntl.h>
+#else
+#ifndef max
+#define max(a,b)            (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef min
+#define min(a,b)            (((a) < (b)) ? (a) : (b))
+#endif
 #endif
 
 #include <boost/interprocess/sync/named_semaphore.hpp>
 
 #include "NamedSemaphore.h"
-using namespace std;
+
 
 class SyncLatencyTest : public ::testing::Test {
 protected:
