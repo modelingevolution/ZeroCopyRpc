@@ -9,7 +9,7 @@ template<unsigned long TSIZE, unsigned long TCAPACITY>
 class  CyclicBuffer
 {
 public:
-    struct  Item
+    struct  Entry
     {
         size_t Size;
         ulong Type;
@@ -17,7 +17,7 @@ public:
     };
     struct  Accessor
     {
-        Item* Item;
+        Entry* Item;
         CyclicBuffer* Buffer;
         template<typename T>
         T* As() const
@@ -39,7 +39,7 @@ public:
             }
             return *this;
         }
-        Accessor(::CyclicBuffer<TSIZE, TCAPACITY>::Item* item, CyclicBuffer<TSIZE, TCAPACITY>* buffer)
+        Accessor(::CyclicBuffer<TSIZE, TCAPACITY>::Entry* item, CyclicBuffer<TSIZE, TCAPACITY>* buffer)
             : Item(item),
             Buffer(buffer)
         {
@@ -56,7 +56,7 @@ public:
             auto written = Span.CommitedSize();
             if (written > 0)
             {
-                _parent->_items[_parent->_nextIndex++ % TCAPACITY] = Item{ written, Type, Span.StartOffset() };
+                _parent->_items[_parent->_nextIndex++ % TCAPACITY] = Entry{ written, Type, Span.StartOffset() };
             }
         }
         WriterScope(const WriterScope&) = delete;
@@ -155,7 +155,7 @@ private:
     std::atomic<ulong> _messageQueueItemsSize;
 
     CyclicMemoryPool<TSIZE> _memory;
-    Item _items[TCAPACITY];
+    Entry _items[TCAPACITY];
 
 };
 
