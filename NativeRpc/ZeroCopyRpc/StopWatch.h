@@ -49,7 +49,7 @@ private:
     StopWatch(std::chrono::nanoseconds *store) noexcept;
 
     static StopWatch StartNew(std::chrono::nanoseconds *store) noexcept;
-    time_point _start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> _start;
     std::chrono::nanoseconds _elapsedTime;
     std::chrono::nanoseconds* _storagePtr;;
     bool _isRunning;
