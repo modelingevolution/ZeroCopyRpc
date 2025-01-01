@@ -11,7 +11,8 @@ public:
 
     template<typename Duration>
     void Wait(Duration duration) {
-        auto target = std::chrono::steady_clock::now() + duration;
+        // we don't have to use steady-clock here. 
+        auto target = std::chrono::high_resolution_clock::now() + duration;
 
         while (std::chrono::high_resolution_clock::now() < target) {
             auto remaining = target - std::chrono::high_resolution_clock::now();

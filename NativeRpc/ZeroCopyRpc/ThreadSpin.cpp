@@ -27,9 +27,9 @@ void ThreadSpin::OnWait(int cycles)
 double ThreadSpin::Calibrate()
 {
 	const int CALIBRATION_CYCLES = 1000;
-	auto start = std::chrono::high_resolution_clock::now();
+	auto start = std::chrono::steady_clock::now();
 	Wait(CALIBRATION_CYCLES);
-	auto elapsed = std::chrono::high_resolution_clock::now() - start;
+	auto elapsed = std::chrono::steady_clock::now() - start;
 
 	auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
 	return static_cast<double>(ns) / CALIBRATION_CYCLES;
