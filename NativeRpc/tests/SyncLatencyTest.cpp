@@ -19,6 +19,7 @@
 #include <boost/interprocess/sync/named_semaphore.hpp>
 
 #include "NamedSemaphore.h"
+using namespace std;
 
 class SyncLatencyTest : public ::testing::Test {
 protected:
