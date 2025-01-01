@@ -24,7 +24,7 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
 endif()
 
 # Set Boost root directory
-set(BOOST_ROOT "../external/boost")
+set(BOOST_ROOT "external/boost")
 
 # Include the Boost directory
 include_directories("${BOOST_ROOT}/boost")
