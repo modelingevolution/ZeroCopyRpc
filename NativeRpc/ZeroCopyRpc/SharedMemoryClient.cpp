@@ -185,7 +185,7 @@ SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(byte sloth, Topic* to
 std::string SharedMemoryClient::SubscriptionCursor::SemaphoreName() const
 {
 	std::ostringstream oss;
-	oss << this->_topic->Parent->_chName << "." << _topic->Name << "." << (ulong)GetCurrentProcessId() << "." << (int)_sloth << ".sem";
+	oss << this->_topic->Parent->_chName << "." << _topic->Name << "." << (ulong)getCurrentProcessId() << "." << (int)_sloth << ".sem";
 	return oss.str();
 }
 

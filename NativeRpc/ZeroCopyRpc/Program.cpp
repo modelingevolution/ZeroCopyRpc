@@ -112,7 +112,7 @@ void test_server()
 }
 void test_client()
 {
-    message_queue::remove(("hot." + std::to_string(GetCurrentProcessId())).c_str());
+    message_queue::remove(("hot." + std::to_string(getCurrentProcessId())).c_str());
     SharedMemoryClient client("hot");
     client.Connect();
     auto cursor = client.Subscribe("chick");

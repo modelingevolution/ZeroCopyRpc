@@ -48,7 +48,7 @@ struct RequestEnvelope
     {
         //TODO
         CorrelationId = Random::Shared();
-        Pid = GetCurrentProcessId();
+        Pid = getCurrentProcessId();
     }
 private:
 
@@ -76,7 +76,7 @@ struct RequestResponseEnvelope
         Promise = new std::promise<TResponse>();
         //TODO
         CorrelationId = Random::Shared();
-        Pid = GetCurrentProcessId();
+        Pid = getCurrentProcessId();
     }
     ~RequestResponseEnvelope()
     {
