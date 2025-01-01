@@ -19,6 +19,12 @@ target_include_directories(ZeroCopyRpcTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# Set Boost root directory
+set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../external/boost")
+
+# Include the Boost directory
+include_directories("${BOOST_ROOT}")
+
 # Enable testing
 enable_testing()
 
