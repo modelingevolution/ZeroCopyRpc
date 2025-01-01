@@ -189,7 +189,7 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 		for(int i = 0; i < 256; i++)
 		{
 			auto& sub = _subscribers[i];
-			if(sub.Active.load(std::memory_order::memory_order_relaxed) )
+			if(sub.Active.load(std::memory_order::relaxed) )
 			{
 				if(sub.PendingRemove.load(std::memory_order_relaxed))
 				{
