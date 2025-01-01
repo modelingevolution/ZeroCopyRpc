@@ -5,12 +5,14 @@
 
 #include "CyclicBuffer.hpp"
 
+template class CyclicBuffer<1024, 16>;
+
 class CyclicBufferTest : public ::testing::Test {
 protected:
     static const unsigned long BUFFER_SIZE = 1024;
     static const unsigned long CAPACITY = 16;
 
-    CyclicBuffer<BUFFER_SIZE, CAPACITY> buffer;
+    CyclicBuffer<1024, 16> buffer;
 };
 
 // Test basic cursor chasing behavior
