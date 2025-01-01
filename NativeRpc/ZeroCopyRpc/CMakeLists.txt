@@ -40,8 +40,7 @@ if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
     
 else()
     # GCC/Clang flags
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
+    target_link_libraries(ZeroCopyRpc PRIVATE atomic)
 endif()
 
 # Create an executable that uses the shared library
