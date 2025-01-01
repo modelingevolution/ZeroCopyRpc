@@ -32,15 +32,14 @@ include_directories("${BOOST_ROOT}")
 # Find Boost libraries (set required components)
 find_package(Boost REQUIRED COMPONENTS filesystem system)
 
-# Link Boost libraries
-target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system)
+
 
 if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
-    # MSVC-specific flags
-    
+    # WINDOWS
+    target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system)
 else()
-    # GCC/Clang flags
-    target_link_libraries(ZeroCopyRpc PRIVATE atomic)
+    # LINUX
+    target_link_libraries(ZeroCopyRpc PRIVATE Boost::filesystem Boost::system atomic)
 endif()
 
 # Create an executable that uses the shared library
