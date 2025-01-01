@@ -4,6 +4,7 @@
 #include <boost/uuid/uuid.hpp>
 #include "Random.h"
 #include "ProcessUtils.h"
+#include "CrossPlatform.h"
 
 using namespace boost::uuids;
 
