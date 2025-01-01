@@ -37,10 +37,12 @@ using namespace boost::uuids;
 
 class EXPORT SharedMemoryClient
 {
+public:
+    struct SubscriptionCursor;
 private:
     static std::string ClientQueueName(const std::string& channelName);
     // forward declarations:
-    struct SubscriptionCursor;
+    
     struct Callback;
     class Topic;
 
