@@ -38,7 +38,7 @@ void StopWatch::Restart() noexcept {
 
 void StopWatch::Reset() noexcept {
     _isRunning = false;
-    _start = time_point();
+    _start = std::chrono::high_resolution_clock::now();
     *_storagePtr = std::chrono::nanoseconds::zero();
 }
 
