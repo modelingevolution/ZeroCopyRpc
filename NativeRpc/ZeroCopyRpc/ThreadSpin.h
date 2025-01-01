@@ -7,7 +7,7 @@ class EXPORT ThreadSpin {
 public:
     ThreadSpin();
 
-    static void Wait(uint64_t cycles);
+    static void Wait(uint64_t cycles=1);
 
     template<typename Duration>
     void WaitFor(Duration duration) {

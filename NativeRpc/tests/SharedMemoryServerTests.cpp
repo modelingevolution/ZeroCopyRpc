@@ -337,7 +337,7 @@ TEST_F(SharedMemoryServerTest, HighPrecisionProducerConsumerPerformance) {
 
 			// Spin-wait until we're close to the target time
 			while (std::chrono::high_resolution_clock::now() < expected_publish_time) {
-				_mm_pause(); // CPU hint that we're spin-waiting
+				ThreadSpin::Wait(10); // CPU hint that we're spin-waiting
 			}
 
 			auto msg = PerformanceMessage(sequence,
