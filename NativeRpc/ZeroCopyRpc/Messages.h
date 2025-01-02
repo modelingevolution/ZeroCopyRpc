@@ -164,6 +164,9 @@ struct TopicMetadata
     void* SubscribersTableAddress(void* base) { return (void*)((size_t)base + sizeof(TopicMetadata)); }
     void* BuffserAddress(void* base) { return (void*)((size_t)base + sizeof(TopicMetadata) + SubscribesTableSize); }
 };
+
+#pragma pack(pop)
+
 struct SubscriptionSharedData
 {
     ulong NextIndex;
@@ -173,12 +176,11 @@ struct SubscriptionSharedData
     pid_t Pid;
     void Reset(pid_t pid) {
         Pid = pid;
-    	Notified.store(0);
-    	Active.store(true);
-    	PendingRemove.store(false);
+        Notified.store(0);
+        Active.store(true);
+        PendingRemove.store(false);
     }
 };
-#pragma pack(pop)
 
 typedef RequestEnvelope<SubscribeCommand, 1> SubscribeCommandEnvelope;
 typedef ResponseEnvelope<SubscribeResponse, 5> SubscribeResponseEnvelope;

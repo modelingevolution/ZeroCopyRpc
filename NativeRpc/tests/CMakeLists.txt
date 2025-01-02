@@ -20,7 +20,15 @@ target_include_directories(ZeroCopyRpcTests PRIVATE
 )
 
 # Set Boost root directory
-set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../external/boost")
+if(DEFINED ENV{SYSTEM_BOOST_ROOT})
+    # Optionally, you can retrieve its value
+    set(BOOST_ROOT "$ENV{SYSTEM_BOOST_ROOT}")
+    message(STATUS "BOOST_ROOT was found on the system. ${BOOST_ROOT}")
+else()
+    set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../external/boost")
+    message(STATUS "BOOST_ROOT was not found system-wide, will use git-submodule instead. ${BOOST_ROOT}")
+
+endif()
 
 # Include the Boost directory
 include_directories("${BOOST_ROOT}")

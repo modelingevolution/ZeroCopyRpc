@@ -23,8 +23,16 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
     set_property(TARGET ZeroCopyRpc PROPERTY CXX_STANDARD 20)
 endif()
 
+if(DEFINED ENV{SYSTEM_BOOST_ROOT})
+    # Optionally, you can retrieve its value
+    set(BOOST_ROOT "$ENV{SYSTEM_BOOST_ROOT}")
+    message(STATUS "BOOST_ROOT was found on the system. ${BOOST_ROOT}")
+else()
+    set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../external/boost")
+    message(STATUS "BOOST_ROOT was not found system-wide, will use git-submodule instead. ${BOOST_ROOT}")
+
+endif()
 # Set Boost root directory
-set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../external/boost")
 
 # Include the Boost directory
 include_directories("${BOOST_ROOT}")
