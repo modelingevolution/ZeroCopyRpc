@@ -23,6 +23,16 @@ protected:
 	SharedMemoryServer* srv = nullptr;
 	SharedMemoryClient* client = nullptr;
 
+	inline static void ClearPreviousStuff()
+	{
+		message_queue::remove("Foo");
+		if (TopicService::TryRemove("Foo", "Boo"))
+		{
+			cout << "SHM removed" << endl;
+			this_thread::sleep_for(milliseconds(100)); // The file needs to be removed.
+		}
+	}
+
 	void TearDown() override
 	{
 		try {
@@ -38,7 +48,7 @@ protected:
 
 TEST_F(SharedMemoryServerTest, StartAndStopOneTopic)
 {
-	message_queue::remove("Foo");
+	ClearPreviousStuff();
 	srv = new SharedMemoryServer("Foo");
 
 	srv->CreateTopic("Boo");
@@ -54,7 +64,7 @@ TEST_F(SharedMemoryServerTest, StartAndStopOneTopic)
 TEST_F(SharedMemoryServerTest, StartAndStopFullClean)
 {
 	// To make it independent.
-	message_queue::remove("Foo");
+	ClearPreviousStuff();
 
 	srv = new SharedMemoryServer("Foo");
 
@@ -78,8 +88,8 @@ struct Message
 };
 TEST_F(SharedMemoryServerTest, SubscribePublish)
 {
-	message_queue::remove("Foo");
-	TopicService::ClearIfExists("Foo", "Boo");
+	ClearPreviousStuff();
+
 	srv = new SharedMemoryServer("Foo");
 	TopicService* topic = srv->CreateTopic("Boo");
 	client = new SharedMemoryClient("Foo");
@@ -108,11 +118,13 @@ TEST_F(SharedMemoryServerTest, SubscribePublish)
 	EXPECT_FALSE(second);
 
 	// subscription unsubscribe is done at destructor of the cursor.
+	
 }
 
 TEST_F(SharedMemoryServerTest, TwoReadersScenario) {
-	message_queue::remove("Foo");
-	TopicService::ClearIfExists("Foo", "Boo");
+
+	ClearPreviousStuff();
+
 	srv = new SharedMemoryServer("Foo");
 	TopicService* topic = srv->CreateTopic("Boo");
 
@@ -146,8 +158,8 @@ TEST_F(SharedMemoryServerTest, TwoReadersScenario) {
 }
 
 TEST_F(SharedMemoryServerTest, LateSubscriptionScenario) {
-	message_queue::remove("Foo");
-	TopicService::ClearIfExists("Foo", "Boo");
+	ClearPreviousStuff();
+
 	srv = new SharedMemoryServer("Foo");
 	TopicService* topic = srv->CreateTopic("Boo");
 	client = new SharedMemoryClient("Foo");
@@ -219,8 +231,7 @@ typedef BigFrame<1920*1080*3/2> MyBigFrame;
 
 TEST_F(SharedMemoryServerTest, LargeMessageCountScenario) {
 	ThreadSpin sp;
-	message_queue::remove("Foo");
-	TopicService::ClearIfExists("Foo", "Boo");
+	ClearPreviousStuff();
 	srv = new SharedMemoryServer("Foo");
 	TopicService* topic = srv->CreateTopic("Boo");
 	client = new SharedMemoryClient("Foo");
@@ -294,8 +305,7 @@ TEST_F(SharedMemoryServerTest, LargeMessageCountScenario) {
 	cout << "Avg.Delay: " << avgDelay.count() << " µs" << endl;
 }
 TEST_F(SharedMemoryServerTest, HighPrecisionProducerConsumerPerformance) {
-	message_queue::remove("Foo");
-	TopicService::ClearIfExists("Foo", "Boo");
+	ClearPreviousStuff();
 	srv = new SharedMemoryServer("Foo");
 	TopicService* topic = srv->CreateTopic("Boo");
 	client = new SharedMemoryClient("Foo");

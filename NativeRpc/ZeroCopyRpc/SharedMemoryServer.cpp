@@ -3,9 +3,6 @@
 #include "ProcessUtils.h"
 #include "ZeroCopyRpcException.h"
 
-template class CyclicBuffer<1024 * 1024 * 8, 256>;
-template class CyclicMemoryPool<8388608>;
-
 
 void TopicService::Subscription::OpenOrCreate(const std::string& semName, byte index)
 {
@@ -90,7 +87,7 @@ std::string TopicService::ShmName(const std::string& channel_name, const std::st
 	return channel_name + "." + topic_name + ".buffer";
 }
 
-PublishScope::PublishScope(CyclicBuffer<1024 * 1024 * 8, 256>::WriterScope&& w, TopicService* parent): _scope( std::move(w)), _parent(parent)
+PublishScope::PublishScope(CyclicBuffer::WriterScope&& w, TopicService* parent): _scope( std::move(w)), _parent(parent)
 {
 		    
 }
@@ -119,15 +116,15 @@ void TopicService::RemoveDanglingSubscriptionEntry(int i, SubscriptionSharedData
 	NamedSemaphore::Remove(semName);
 	sub.PendingRemove.store(false);
 }
-bool TopicService::ClearIfExists(const std::string& channel_name, const std::string& topic_name)
+bool TopicService::ClearIfExists(const std::string& channel_name, const std::string& topic_name, unsigned int messageCount, unsigned int bufferSize)
 {
 	try {
 		shared_memory_object shm(open_only, ShmName(channel_name, topic_name).c_str(), read_write);
 		offset_t size;
 		shm.get_size(size);
 		TopicMetadata m = {
-			sizeof(CyclicBuffer<1024 * 1024 * 8, 256>),
-			sizeof(SubscriptionSharedData) * 256 };
+			CyclicBuffer::SizeOf(messageCount, bufferSize),
+			sizeof(SubscriptionSharedData) * messageCount };
 
 		if (size > 0)
 		{
@@ -150,7 +147,15 @@ bool TopicService::ClearIfExists(const std::string& channel_name, const std::str
 		return false;
 	}
 }
-TopicService::TopicService(const std::string& channel_name, const std::string& topic_name) :
+
+bool TopicService::TryRemove(const std::string& channel_name, const std::string& topic_name)
+{
+	auto name = ShmName(channel_name, topic_name);
+	return shared_memory_object::remove(name.c_str());
+}
+
+TopicService::TopicService(const std::string& channel_name, const std::string& topic_name, 
+                           unsigned int messageCount, unsigned int bufferSize) :
 	_channelName(channel_name),
 	_topicName(topic_name),
 	_shm(nullptr),
@@ -160,7 +165,7 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 	_shm = new shared_memory_object(open_or_create, ShmName(channel_name, topic_name).c_str(), read_write);
 
 	TopicMetadata m = {
-		sizeof(CyclicBuffer<1024 * 1024 * 8, 256>),
+		CyclicBuffer::SizeOf(messageCount,bufferSize),
 		sizeof(SubscriptionSharedData) * 256 };
 	offset_t size;
 	_shm->get_size(size);
@@ -176,7 +181,8 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 		*metadata = m; // copy
 
 		_subscribers = (SubscriptionSharedData*)m.SubscribersTableAddress(dst);
-		_buffer = (CyclicBuffer<1024 * 1024 * 8, 256>*)m.BuffserAddress(dst);
+		auto bufferPtr = (byte*)m.BuffserAddress(dst);
+		_buffer = new (bufferPtr) CyclicBuffer(bufferPtr,messageCount, bufferSize);
 	}
 	else
 	{
@@ -184,7 +190,7 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 		auto dst = _region->get_address();
 		auto& m = *(TopicMetadata*)dst;
 		_subscribers = (SubscriptionSharedData*)m.SubscribersTableAddress(dst);
-		_buffer = (CyclicBuffer<1024 * 1024 * 8, 256>*)m.BuffserAddress(dst);
+		_buffer = (CyclicBuffer*)m.BuffserAddress(dst);
 
 		// now we should rebuild Subscribers table.
 		for(int i = 0; i < 256; i++)
@@ -240,7 +246,9 @@ byte TopicService::Subscribe(pid_t pid)
 
 	auto& item = this->_subscribers[index];
 	item.Reset(pid);
-	Subscription s(GetSubscriptionSemaphoreName(pid, index), index);
+	//Subscription s(GetSubscriptionSemaphoreName(pid, index), index);
+	Subscription s;
+	s.OpenOrCreate(GetSubscriptionSemaphoreName(pid, index), index);
 	_subscriptions.push(s);
 
 	return index;
@@ -285,9 +293,9 @@ std::string TopicService::Name()
 	return this->_topicName;
 }
 
-CyclicMemoryPool<8388608>::Span& PublishScope::Span()
+CyclicMemoryPool::Span& PublishScope::Span()
 {
-	CyclicMemoryPool<8388608>::Span &p  = _scope.Span; return p;
+	CyclicMemoryPool::Span &p  = _scope.Span; return p;
 }
 
 byte SharedMemoryServer::Subscribe(const char* topicName, pid_t pid)
@@ -386,8 +394,9 @@ void SharedMemoryServer::DispatchMessages()
 			case 2:
 				{
 					auto& env= *(CreateSubscriptionEnvelope*)buffer;
-					std::cout << "Create subscription, " << env.Request << std::endl;
-					env.Set(this->CreateSubscription(env.Request.TopicName));
+					auto &rqt = env.Request;
+					std::cout << "Create Topic, " << &rqt << std::endl;
+					env.Set(this->OnCreateTopic(rqt.TopicName, rqt.MaxMessageCount, rqt.BufferSize));
 					break;
 				}
 			case 3:
@@ -452,7 +461,7 @@ bool SharedMemoryServer::RemoveSubscription(const char* topicName)
 		return false;
 	}
 }
-TopicService* SharedMemoryServer::CreateSubscription(const char* topicName)
+TopicService* SharedMemoryServer::OnCreateTopic(const char* topicName, unsigned int messageCount, unsigned int bufferSize)
 {
 	std::string key(topicName);
 	auto it = _topics.find(key);
@@ -464,7 +473,7 @@ TopicService* SharedMemoryServer::CreateSubscription(const char* topicName)
 	}
 	else
 	{
-		auto result = new TopicService(this->_chName, topicName);
+		auto result = new TopicService(this->_chName, topicName, messageCount, bufferSize);
            
 		_topics.emplace(topicName, result);
 		return result;
@@ -505,11 +514,12 @@ bool SharedMemoryServer::RemoveTopic(const std::string& topicName)
 
 	return env.Response();
 }
-TopicService* SharedMemoryServer::CreateTopic(const std::string& topicName)
+TopicService* SharedMemoryServer::CreateTopic(const std::string& topicName, unsigned int messageCount, unsigned int bufferSize)
 {
 	CreateSubscriptionEnvelope env;
 	env.Request.SetTopicName(topicName);
-
+	env.Request.MaxMessageCount = messageCount;
+	env.Request.BufferSize = bufferSize;
 	_messageQueue.send(&env, sizeof(CreateSubscriptionEnvelope), 0);
         
 	return env.Response();

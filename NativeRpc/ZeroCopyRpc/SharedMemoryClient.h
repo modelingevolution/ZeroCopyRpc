@@ -65,7 +65,7 @@ private:
     public:
         TopicMetadata* Metadata = nullptr;
         SubscriptionSharedData* Subscribers = nullptr;
-        CyclicBuffer<1024 * 1024 * 8, 256>* SharedBuffer = nullptr;
+        CyclicBuffer* SharedBuffer = nullptr;
         SharedMemoryClient* Parent = nullptr;
         std::string Name;
         Topic(SharedMemoryClient* parent, const std::string& topicName);
@@ -112,8 +112,8 @@ public:
 
         std::string SemaphoreName() const;
 
-        CyclicBuffer<1024 * 1024 * 8, 256>::Accessor Read() ;
-        bool TryRead(CyclicBuffer<1024 * 1024 * 8, 256>::Accessor &a) const;
+        CyclicBuffer::Accessor Read() ;
+        bool TryRead(CyclicBuffer::Accessor &a) const;
         SubscriptionCursor(const SubscriptionCursor& other) = delete;
 
         friend void swap(SubscriptionCursor& lhs, SubscriptionCursor& rhs) noexcept;
@@ -129,7 +129,7 @@ public:
         NamedSemaphore* _sem;
         byte _sloth;
         Topic* _topic;
-        CyclicBuffer<1024 * 1024 * 8, 256>::Cursor* _cursor;
+        CyclicBuffer::Cursor* _cursor;
     };
 
     SharedMemoryClient(const std::string& channelName);

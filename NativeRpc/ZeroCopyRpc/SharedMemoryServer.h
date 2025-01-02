@@ -53,7 +53,7 @@ using namespace boost::uuids;
 #include "Random.h"
 #include "Export.h"
 
-typedef CyclicBuffer<1024 * 1024 * 8, 256> CyclicBuffer8M;
+
 
 
 
@@ -65,8 +65,8 @@ typedef CyclicBuffer<1024 * 1024 * 8, 256> CyclicBuffer8M;
 struct EXPORT PublishScope
 {
     PublishScope() = default;
-    PublishScope(CyclicBuffer8M::WriterScope&& w, TopicService* parent);
-    CyclicMemoryPool<8388608>::Span& Span();
+    PublishScope(CyclicBuffer::WriterScope&& w, TopicService* parent);
+    CyclicMemoryPool::Span& Span();
     PublishScope(const PublishScope& other) = delete;
     ulong Type() const;
 
@@ -75,7 +75,7 @@ struct EXPORT PublishScope
 
 private:
 
-    CyclicBuffer8M::WriterScope _scope;
+    CyclicBuffer::WriterScope _scope;
     TopicService* _parent;
 };
 
@@ -102,8 +102,11 @@ public:
         
 
     void RemoveDanglingSubscriptionEntry(int i, SubscriptionSharedData& sub) const;
-    static bool ClearIfExists(const std::string& channel_name, const std::string& topic_name);
-    TopicService(const std::string& channel_name, const std::string& topic_name);
+    static bool ClearIfExists(const std::string& channel_name, const std::string& topic_name, 
+        unsigned int messageCount = 256, 
+        unsigned int bufferSize = 8*1024*1024);
+    static bool TryRemove(const std::string& channel_name, const std::string& topic_name);
+    TopicService(const std::string& channel_name, const std::string& topic_name, unsigned int messageCount, unsigned int bufferSize);
 
     inline std::string GetSubscriptionSemaphoreName(pid_t pid, int index) const;
 
@@ -138,7 +141,7 @@ private:
     SubscriptionSharedData* _subscribers; // 256
 
     // IN SHM
-    CyclicBuffer8M* _buffer;
+    CyclicBuffer* _buffer;
 
     void NotifyAll();
 };
@@ -162,7 +165,7 @@ private:
 
     void DispatchMessages();
     
-    TopicService* CreateSubscription(const char *topicName);
+    TopicService* OnCreateTopic(const char *topicName, unsigned int messageCount, unsigned int bufferSize);
     bool RemoveSubscription(const char* topicName);
 public:
     SharedMemoryServer(const std::string& channel);
@@ -170,6 +173,8 @@ public:
     ~SharedMemoryServer();
 
     
-    TopicService* CreateTopic(const std::string& topicName);
+    TopicService* CreateTopic(const std::string& topicName, 
+        unsigned int messageCount = 256, 
+        unsigned int bufferSize = 8*1024*1024);
     bool RemoveTopic(const std::string& topicName);
 };

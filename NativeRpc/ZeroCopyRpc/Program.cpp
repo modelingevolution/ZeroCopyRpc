@@ -68,8 +68,8 @@ int main(int argc, char* argv[])
 }
 void test_cyclic_buffer2()
 {
-    auto buffer = new CyclicBuffer<1024 * 1024 * 8, 256>();
-    long size = sizeof(CyclicBuffer<1024 * 1024 * 8, 256>);
+    auto buffer = new CyclicBuffer(256,8*1024*1024);
+    long size = sizeof(CyclicBuffer);
     unsigned char* ptr = new unsigned char[size];
     memset(ptr, 0, size);
 

@@ -12,28 +12,31 @@ using namespace boost::uuids;
 class TopicService;
 
 #pragma pack(push, 1)
-struct RemoveSubscription
+struct RemoveTopic
 {
     char TopicName[256];
     inline void SetTopicName(const std::string& str)
     {
         strncpy_s(TopicName, str.c_str(), sizeof(TopicName) - 1);  // Leave room for null terminator
     }
-    friend std::ostream& operator<<(std::ostream& os, const RemoveSubscription& obj)
+    friend std::ostream& operator<<(std::ostream& os, const RemoveTopic& obj)
     {
         return os << "Topic name: " << obj.TopicName;
     }
 };
-struct CreateSubscription
+struct CreateTopic
 {
     char TopicName[256];
+    unsigned int MaxMessageCount;
+    unsigned int BufferSize;
+
     inline void SetTopicName(const std::string& str)
     {
         strncpy_s(TopicName, str.c_str(), sizeof(TopicName) - 1);  // Leave room for null terminator
     }
-    friend std::ostream& operator<<(std::ostream& os, const CreateSubscription& obj)
+    friend std::ostream& operator<<(std::ostream& os, const CreateTopic& obj)
     {
-        return os << "Topic name: " << obj.TopicName;
+        return os << "Name: " << obj.TopicName << " (capacity: " << obj.MaxMessageCount << ", size: " << obj.BufferSize << "B )";
     }
 };
 
@@ -188,8 +191,8 @@ typedef ResponseEnvelope<SubscribeResponse, 5> SubscribeResponseEnvelope;
 typedef RequestEnvelope<UnSubscribeCommand, 6> UnSubscribeCommandEnvelope;
 typedef ResponseEnvelope<UnSubscribeResponse, 7> UnSubscribeResponseEnvelope;
 
-typedef RequestResponseEnvelope<CreateSubscription, 2, TopicService*> CreateSubscriptionEnvelope;
-typedef RequestResponseEnvelope<RemoveSubscription, 8, bool> RemoveSubscriptionEnvelope;
+typedef RequestResponseEnvelope<CreateTopic, 2, TopicService*> CreateSubscriptionEnvelope;
+typedef RequestResponseEnvelope<RemoveTopic, 8, bool> RemoveSubscriptionEnvelope;
 
 typedef RequestEnvelope<HelloCommand, 3> HelloCommandEnvelope;
 typedef ResponseEnvelope<HelloResponse, 4> HelloResponseEnvelope;

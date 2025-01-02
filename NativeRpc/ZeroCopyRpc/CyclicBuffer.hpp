@@ -5,7 +5,7 @@
 #include <iostream>
 
 
-template<unsigned long TSIZE, unsigned long TCAPACITY>
+
 class  CyclicBuffer
 {
 public:
@@ -39,7 +39,7 @@ public:
             }
             return *this;
         }
-        Accessor(::CyclicBuffer<TSIZE, TCAPACITY>::Entry* item, CyclicBuffer<TSIZE, TCAPACITY>* buffer)
+        Accessor(::CyclicBuffer::Entry* item, CyclicBuffer* buffer)
             : Item(item),
             Buffer(buffer)
         {
@@ -49,14 +49,14 @@ public:
     };
     struct  WriterScope
     {
-        CyclicMemoryPool<TSIZE>::Span Span;
+        CyclicMemoryPool::Span Span;
         unsigned long Type;
         ~WriterScope()
         {
             auto written = Span.CommitedSize();
             if (written > 0)
             {
-                _parent->_items[_parent->_nextIndex++ % TCAPACITY] = Entry{ written, Type, Span.StartOffset() };
+                _parent->_items[_parent->_nextIndex++ % _parent->_capacity] = Entry{ written, Type, Span.StartOffset() };
             }
         }
         WriterScope(const WriterScope&) = delete;
@@ -67,7 +67,7 @@ public:
         {
             other._parent = nullptr;
         }
-        WriterScope(CyclicMemoryPool<TSIZE>::Span&& span, unsigned long type, CyclicBuffer<TSIZE, TCAPACITY>* parent)
+        WriterScope(CyclicMemoryPool::Span&& span, unsigned long type, CyclicBuffer* parent)
             : Span(std::move(span)), // Move the span
             _parent(parent),
             Type(type)
@@ -85,13 +85,13 @@ public:
     {
         unsigned long Index;
         
-        unsigned long Remaining() const { return _parent->_nextIndex - Index; }
+        unsigned long Remaining() const { return _parent->_nextIndex - Index - 1; }
         Accessor Data() const
         {
-            auto item = &(_parent->_items[(Index - 1) % TCAPACITY]);
+            auto item = &(_parent->_items[(Index) % _parent->_capacity]);
             return Accessor(item, _parent);
         }
-        Cursor(unsigned long index, CyclicBuffer<TSIZE, TCAPACITY>* parent)
+        Cursor(unsigned long index, CyclicBuffer* parent)
             : Index(index),
             _parent(parent)
         {
@@ -102,7 +102,7 @@ public:
         {
             //std::cout << "CLIENT: TryRead, parent->nextIndex: " << _parent->_nextIndex << " Cursor.Index: " << Index << std::endl;
             auto diff = _parent->_nextIndex - Index;
-            if (diff > 0)
+            if (diff > 1)
             {
                 //std::cout << "CLIENT: DIFF is positive, incrementing Index by 1." << std::endl;
 
@@ -123,9 +123,9 @@ public:
 
 
     };
-    Cursor ReadNext()
+    Cursor OpenCursor()
     {
-        return ReadNext(_nextIndex);
+        return OpenCursor(_nextIndex);
     }
     template<typename T, typename... Args>
     void Write(ulong type, Args&&... args) {
@@ -135,9 +135,9 @@ public:
         auto ptr = new (span.Start) T(std::forward<Args>(args)...);
         span.Commit(sizeof(T));
     }
-    Cursor ReadNext(ulong nextValue)
+    Cursor OpenCursor(ulong at)
     {
-        return Cursor(nextValue, this);
+        return Cursor(at-1, this);
     }
     WriterScope WriteScope(ulong minSize, ulong type)
     {
@@ -148,14 +148,36 @@ public:
     {
         return _nextIndex;
     }
+
+    CyclicBuffer(unsigned long capacity, unsigned long size) :
+        _external(false), _capacity(capacity), _memory(size)
+    {
+        _items = new Entry[capacity];
+    }
+    CyclicBuffer(byte* buffer, unsigned long capacity, unsigned long size) :
+	_external(true), _capacity(capacity), _items(nullptr),
+	_memory(buffer + MemoryPoolOffset(capacity), size)
+    {
+        auto ptr = buffer + sizeof(CyclicBuffer);
+        _items =  new (ptr) Entry[capacity];
+    }
+    static size_t MemoryPoolOffset(unsigned long capacity) { return sizeof(CyclicBuffer) + capacity * sizeof(Entry); }
+    static size_t SizeOf(unsigned long capacity, unsigned long size)
+    {
+        return capacity * sizeof(Entry) + sizeof(CyclicBuffer) + CyclicMemoryPool::SizeOf(size);
+    }
+    ~CyclicBuffer()
+    {
+	    if(!_external)
+	    {
+            delete[] _items;
+	    }
+    }
 private:
     std::atomic<ulong> _nextIndex = 0;
-
-    // We constantly check if there is enough memory in the CyclicMemoryPool for all the Items in the ring.
-    std::atomic<ulong> _messageQueueItemsSize;
-
-    CyclicMemoryPool<TSIZE> _memory;
-    Entry _items[TCAPACITY];
-
+    bool _external;
+    unsigned long _capacity;
+    Entry* _items;
+    CyclicMemoryPool _memory;
 };
 

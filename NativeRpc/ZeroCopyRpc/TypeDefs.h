@@ -2,8 +2,8 @@
 
 #include "IDPool.hpp"
 
-typedef unsigned char byte;
-typedef unsigned long ulong;
-typedef unsigned int uint;
+typedef uint8_t byte;
+typedef uint64_t ulong;
+typedef uint32_t uint;
 typedef IDPool<byte, 256> IDPool256;
 

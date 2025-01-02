@@ -45,7 +45,7 @@ _openCursorClientCount(0)
 	auto base = Region->get_address();
 	Metadata = (TopicMetadata*)base;
 	Subscribers = (SubscriptionSharedData*)Metadata->SubscribersTableAddress(base);
-	SharedBuffer = (CyclicBuffer<1024 * 1024 * 8, 256>*)Metadata->BuffserAddress(base);
+	SharedBuffer = (CyclicBuffer*)Metadata->BuffserAddress(base);
 }
 
 SharedMemoryClient::Topic::~Topic()
@@ -190,7 +190,7 @@ std::string SharedMemoryClient::SubscriptionCursor::SemaphoreName() const
 	return oss.str();
 }
 
-CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCursor::Read()
+CyclicBuffer::Accessor SharedMemoryClient::SubscriptionCursor::Read()
 {
 	/*while (!_sem->try_wait())
 		ThreadSpin::Wait(100);*/
@@ -198,7 +198,7 @@ CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCur
 	if(_cursor == nullptr)
 	{
 		auto value = _topic->Subscribers[_sloth].NextIndex; // this should the value from shared memory.
-		_cursor = new CyclicBuffer<1024 * 1024 * 8, 256>::Cursor(_topic->SharedBuffer->ReadNext(value)); // move ctor.
+		_cursor = new CyclicBuffer::Cursor(_topic->SharedBuffer->OpenCursor(value)); // move ctor.
 	}
 	for(int i = 0; i < 10; i++)
 	{
@@ -209,7 +209,7 @@ CyclicBuffer<1024 * 1024 * 8, 256>::Accessor SharedMemoryClient::SubscriptionCur
 	}
 	throw ZeroCopyRpcException("TryRead returned false.");
 }
-bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer<1024 * 1024 * 8, 256>::Accessor &a) const
+bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer::Accessor &a) const
 {
 	if (!_sem->TryAcquire())
 		return false;

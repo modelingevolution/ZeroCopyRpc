@@ -1,15 +1,18 @@
 #pragma once
+#include "TypeDefs.h"
 
-template<unsigned long TSIZE>
 class CyclicMemoryPool
 {
 private:
-    byte _buffer[TSIZE];
+    byte* _buffer;
     size_t _offset;
+    unsigned long _size;
+    bool _external;
     std::atomic<bool> _inUse;
 
-    size_t remaining() const { return TSIZE - _offset; }
+    size_t Remaining() const { return _size - _offset; }
 
+    
 public:
 
     struct Span {
@@ -53,21 +56,40 @@ public:
         size_t _committed;
     };
 
-    CyclicMemoryPool()
-        : _offset(0), _inUse(false), _buffer(0) {
+
+   
+    static size_t SizeOf(unsigned long size)
+    {
+        return sizeof(CyclicMemoryPool) + size;
+    }
+    ~CyclicMemoryPool()
+    {
+	    if(!_external)
+	    {
+            delete[] _buffer;
+            _buffer = nullptr;
+	    }
+    }
+    CyclicMemoryPool(byte* buffer, unsigned long size) : _size(size),
+        _offset(0), _inUse(false), _external(true), _buffer(buffer + sizeof(CyclicMemoryPool)) {
+
+    }
+    CyclicMemoryPool(unsigned long size) : _size(size),
+         _offset(0), _inUse(false), _buffer(nullptr), _external(false) {
+        _buffer = new byte[_size];
     }
     byte* Get(size_t offset)
     {
         return _buffer + offset;
     }
-    size_t Size() const { return TSIZE; }
+    size_t Size() const { return _size; }
     byte* End() { return _buffer + _offset; }
     Span GetWriteSpan(size_t minSize) {
-        if (minSize > TSIZE) {
+        if (minSize > _size) {
             throw std::runtime_error("Requested size exceeds buffer capacity.");
         }
 
-        size_t freeSpace = remaining();
+        size_t freeSpace = Remaining();
         bool expected = false;
 
         // Try to acquire the lock
@@ -78,7 +100,7 @@ public:
         // Check if there is enough space, or reset the pointer to reuse the buffer
         if (freeSpace < minSize) {
             _offset = 0;
-            freeSpace = TSIZE;
+            freeSpace = _size;
         }
 
         return Span(this->End(), freeSpace, this);
