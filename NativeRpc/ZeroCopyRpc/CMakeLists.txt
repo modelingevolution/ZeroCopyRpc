@@ -26,6 +26,7 @@ endif()
 if(DEFINED ENV{SYSTEM_BOOST_ROOT})
     # Optionally, you can retrieve its value
     set(BOOST_ROOT "$ENV{SYSTEM_BOOST_ROOT}")
+    set(Boost_INCLUDE_DIR ${BOOST_ROOT})
     message(STATUS "BOOST_ROOT was found on the system. ${BOOST_ROOT}")
 else()
     set(BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../external/boost")
@@ -36,10 +37,11 @@ endif()
 
 # Include the Boost directory
 include_directories("${BOOST_ROOT}")
+link_directories("${BOOST_ROOT}/stage/lib")
 
-
+set(Boost_USE_STATIC_LIBS OFF)
 # Find Boost libraries (set required components)
-find_package(Boost REQUIRED COMPONENTS filesystem system)
+find_package(Boost REQUIRED COMPONENTS filesystem system program_options)
 
 
 
@@ -52,12 +54,12 @@ else()
 endif()
 
 # Create an executable that uses the shared library
-add_executable(ZeroCopyRpcExecutable
+add_executable(zq
     "Program.cpp" 
 )
 
 # Link the executable to the shared library
-target_link_libraries(ZeroCopyRpcExecutable PRIVATE ZeroCopyRpc)
+target_link_libraries(zq PRIVATE ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options)
 
 # Set output directories for the shared library
 set_target_properties(ZeroCopyRpc PROPERTIES
@@ -67,6 +69,6 @@ set_target_properties(ZeroCopyRpc PROPERTIES
 )
 
 # Set output directory for the executable
-set_target_properties(ZeroCopyRpcExecutable PROPERTIES
+set_target_properties(zq PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )

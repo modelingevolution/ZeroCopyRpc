@@ -19,23 +19,7 @@ struct ReplicationMessage {
 };
 class ShmReplicationTarget;
 
-/// <summary>
-/// For scenarios where we don't spin ShmReplicationTarget in a separate process.
-/// </summary>
-class EXPORT ShmReplicationClient : ISharedMemoryClient
-{
-public:
-	ShmReplicationClient(const std::string &channel, const std::string& host, uint16_t port) {  }
-    void Connect() override { }
-    std::unique_ptr<ISubscriptionCursor> Subscribe(const std::string& topicName) override
-	{
-        throw std::exception("foo");
-	}
-private:
-    std::shared_ptr<SharedMemoryServer> _server;
-    std::unordered_map<std::string, std::shared_ptr<ShmReplicationTarget>> _targets;
 
-};
 /// <summary>
 /// For scenarios where you want to replicate channels topic's over TCP.
 /// </summary>
