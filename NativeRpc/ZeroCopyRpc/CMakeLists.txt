@@ -13,7 +13,7 @@ add_library(ZeroCopyRpc SHARED
  "PeriodicTimer.cpp" 
  "NamedSemaphore.h" "NamedSemaphore.cpp" "CrossPlatform.h" 
  "CrossPlatform.cpp" "ZeroCopyRpcException.h"
- "ZeroCopyRpcException.cpp")
+ "ZeroCopyRpcException.cpp" "ShmReplicator.h" "ShmReplicator.cpp" "ISharedMemoryClient.h")
 target_compile_definitions(ZeroCopyRpc PRIVATE BUILD_DLL)
 
 target_include_directories(ZeroCopyRpc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

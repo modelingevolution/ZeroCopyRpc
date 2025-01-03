@@ -5,6 +5,7 @@
 #include "SharedMemoryClient.h"
 
 #if defined(_WIN32) || defined(_WIN64)
+#include <WinSock2.h> 
 #include <windows.h>
 bool isDebuggerAttached() {
     return IsDebuggerPresent();

@@ -29,6 +29,7 @@
 
 #include "NamedSemaphore.h"
 #ifdef WIN32
+#include <WinSock2.h> 
 #include <windows.h>
 typedef DWORD pid_t;
 #else

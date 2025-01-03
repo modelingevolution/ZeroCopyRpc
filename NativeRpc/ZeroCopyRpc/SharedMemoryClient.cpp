@@ -69,7 +69,7 @@ void SharedMemoryClient::Topic::Unsubscribe(byte sloth)
 
 void SharedMemoryClient::Topic::AckUnsubscribed(byte sloth)
 {
-	this->_openCursorServerCount.fetch_sub(1);
+	this->_openCursorServerCount.fetch_sub(1, std::memory_order::relaxed);
 }
 
 void SharedMemoryClient::Topic::UnsubscribeAll()
@@ -195,6 +195,7 @@ CyclicBuffer::Accessor SharedMemoryClient::SubscriptionCursor::Read()
 	/*while (!_sem->try_wait())
 		ThreadSpin::Wait(100);*/
 	_sem->Acquire();
+
 	if(_cursor == nullptr)
 	{
 		auto value = _topic->Subscribers[_sloth].NextIndex; // this should the value from shared memory.
@@ -209,10 +210,17 @@ CyclicBuffer::Accessor SharedMemoryClient::SubscriptionCursor::Read()
 	}
 	throw ZeroCopyRpcException("TryRead returned false.");
 }
-bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer::Accessor &a) const
+
+bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer::Accessor &a) 
 {
 	if (!_sem->TryAcquire())
 		return false;
+
+	if (_cursor == nullptr)
+	{
+		auto value = _topic->Subscribers[_sloth].NextIndex; // this should the value from shared memory.
+		_cursor = new CyclicBuffer::Cursor(_topic->SharedBuffer->OpenCursor(value)); // move ctor.
+	}
 
 	for (int i = 0; i < 10; i++)
 	{
@@ -225,7 +233,8 @@ bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer::Accessor &a) 
 	}
 	throw ZeroCopyRpcException("TryRead returned false.");
 }
-SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(SubscriptionCursor&& other) noexcept: _sem(other._sem),
+SharedMemoryClient::SubscriptionCursor::SubscriptionCursor(SubscriptionCursor&& other) noexcept: //ISubscriptionCursor(std::move(other)),
+	_sem(other._sem),
 	_sloth(other._sloth),
 	_topic(other._topic),
 	_cursor(other._cursor)
@@ -282,6 +291,29 @@ std::chrono::milliseconds RequestDuration(const T& response)
 	return duration;
 }
 
+bool SharedMemoryClient::SubscriptionCursor::TryReadFor(
+	CyclicBuffer::Accessor& a,
+	const std::chrono::milliseconds& timeout)
+{
+	if (!_sem->TryAcquireFor(timeout)) {
+		return false;
+	}
+
+	if (_cursor == nullptr) {
+		auto value = _topic->Subscribers[_sloth].NextIndex;
+		_cursor = new CyclicBuffer::Cursor(_topic->SharedBuffer->OpenCursor(value));
+	}
+
+	for (int i = 0; i < 10; i++) {
+		if (_cursor->TryRead()) {
+			a = std::move(_cursor->Data());
+			return true;
+		}
+		ThreadSpin::Wait(100);
+	}
+
+	throw ZeroCopyRpcException("TryRead returned false.");
+}
 void SharedMemoryClient::Connect()
 {
 	HelloCommandEnvelope env;
@@ -294,7 +326,7 @@ void SharedMemoryClient::Connect()
 	std::cout << "Connected. It took: " << RequestDuration(value->Response) << std::endl;
 }
 
-std::unique_ptr<SharedMemoryClient::SubscriptionCursor> SharedMemoryClient::Subscribe(const std::string& topicName)
+std::unique_ptr<ISubscriptionCursor> SharedMemoryClient::Subscribe(const std::string& topicName)
 {
 	SubscribeCommandEnvelope env;
 	auto delegate = std::bind(&SharedMemoryClient::OnSubscribed, this, std::placeholders::_1, std::placeholders::_2);
@@ -304,7 +336,7 @@ std::unique_ptr<SharedMemoryClient::SubscriptionCursor> SharedMemoryClient::Subs
 	Callback c(&promise, delegate);
 	_messages.InsertOrUpdate(env.CorrelationId, c);
 
-	std::cout << "Sending message size: " << sizeof(SubscribeCommandEnvelope) << std::endl;
+	//std::cout << "Sending message size: " << sizeof(SubscribeCommandEnvelope) << std::endl;
 	_srvQueue.send(&env, sizeof(SubscribeCommandEnvelope), 0);
 
 	auto value = promise.get_future().get();

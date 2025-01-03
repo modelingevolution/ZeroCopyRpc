@@ -32,10 +32,15 @@
 #include "ProcessUtils.h"
 #include "Export.h"
 #include "NamedSemaphore.h"
+#include "ThreadSpin.h"
+#include "ZeroCopyRpcException.h"
+#include "ISharedMemoryClient.h"
 using namespace boost::interprocess;
 using namespace boost::uuids;
 
-class EXPORT SharedMemoryClient
+
+
+class EXPORT SharedMemoryClient : public ISharedMemoryClient
 {
 public:
     struct SubscriptionCursor;
@@ -106,14 +111,16 @@ private:
     Topic* GetOrCreate(const std::string& topic);
 
 public:
-    struct EXPORT SubscriptionCursor
+    struct EXPORT SubscriptionCursor : public ISubscriptionCursor
     {
         SubscriptionCursor(byte sloth, Topic* topic);
 
         std::string SemaphoreName() const;
 
-        CyclicBuffer::Accessor Read() ;
-        bool TryRead(CyclicBuffer::Accessor &a) const;
+        CyclicBuffer::Accessor Read() override;
+        
+        bool TryReadFor(CyclicBuffer::Accessor& a, const std::chrono::milliseconds& timeout) override;
+        bool TryRead(CyclicBuffer::Accessor &a) override;
         SubscriptionCursor(const SubscriptionCursor& other) = delete;
 
         friend void swap(SubscriptionCursor& lhs, SubscriptionCursor& rhs) noexcept;
@@ -123,7 +130,7 @@ public:
         SubscriptionCursor& operator=(SubscriptionCursor other);
         SubscriptionCursor& operator=(SubscriptionCursor && other) noexcept;
 
-        ~SubscriptionCursor();
+        ~SubscriptionCursor() override;
 
     private:
         NamedSemaphore* _sem;
@@ -134,9 +141,10 @@ public:
 
     SharedMemoryClient(const std::string& channelName);
 
-    void Connect();
+    void Connect() override;
 
-    std::unique_ptr<SubscriptionCursor> Subscribe(const std::string& topicName);
-    ~SharedMemoryClient();
+    std::unique_ptr<ISubscriptionCursor> Subscribe(const std::string& topicName) override;
+    ~SharedMemoryClient() override;
     
 };
+

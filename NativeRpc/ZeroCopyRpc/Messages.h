@@ -118,6 +118,7 @@ struct UnSubscribeCommand
 {
     // SubscribersTableIndex
     byte SlothId;
+    // TODO: Should be char*, and have static SizeOf method. Allocation should be done by in-place operator.
     char TopicName[256];
     inline void SetTopicName(const std::string& str)
     {
@@ -128,14 +129,16 @@ struct UnSubscribeResponse
 {
     bool IsSuccess;
     byte SlothId;
+    // TODO: Should be char*, and have static SizeOf method. Allocation should be done by in-place operator.
     char TopicName[256];
     inline void SetTopicName(const std::string& str)
     {
         strncpy_s(TopicName, str.c_str(), sizeof(TopicName) - 1);  // Leave room for null terminator
     }
 };
-struct SubscribeCommand {
 
+struct SubscribeCommand {
+	// TODO: Should be char*, and have static SizeOf method. Allocation should be done by in-place operator.
     char TopicName[256];
 
     SubscribeCommand() : TopicName{}

@@ -6,6 +6,7 @@
 #include "Export.h"
 
 #ifdef _WIN32
+#include <WinSock2.h> 
 #include <windows.h>
 #else
 #include <fcntl.h>
@@ -50,8 +51,8 @@ public:
     bool TryAcquire();
 
     // Tries to acquire the semaphore with timeout
-    template<typename Rep, typename Period>
-    bool TryAcquireFor(const std::chrono::duration<Rep, Period>& timeout);
+    
+    bool TryAcquireFor(const std::chrono::milliseconds& timeout);
 
     // Releases the semaphore (increments count)
     void Release(unsigned int count = 1);
@@ -72,24 +73,3 @@ private:
     static std::string FormatName(const std::string& name);
 };
 
-template <typename Rep, typename Period>
-bool NamedSemaphore::TryAcquireFor(const std::chrono::duration<Rep, Period>& timeout)
-{
-#ifdef _WIN32
-	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(timeout);
-	DWORD result = WaitForSingleObject(_handle, static_cast<DWORD>(milliseconds.count()));
-	if (result == WAIT_FAILED) {
-		throw std::system_error(GetLastError(), std::system_category(), "Failed to try acquire semaphore with timeout");
-	}
-	return result == WAIT_OBJECT_0;
-#else
-        auto now = std::chrono::system_clock::now();
-        auto systemTimeout = now + timeout;
-        timespec ts;
-        ts.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(systemTimeout.time_since_epoch()).count();
-        ts.tv_nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            systemTimeout.time_since_epoch() % std::chrono::seconds(1)).count();
-
-        return sem_timedwait(_handle, &ts) == 0;
-#endif
-}

@@ -1,5 +1,5 @@
 ﻿#include "SharedMemoryServer.h"
-#include "SharedMemoryServer.h"
+
 #include "ProcessUtils.h"
 #include "ZeroCopyRpcException.h"
 
@@ -60,7 +60,7 @@ void TopicService::NotifyAll()
 			{
 				// this is the first time, need to set the cursors index.
 				data.NextIndex = _buffer->NextIndex();
-				std::cout << "SERVER: Start offset set: " << data.NextIndex << std::endl;
+				//std::cout << "SERVER: Start offset set: " << data.NextIndex << std::endl;
 			}
 
 			s.Sem->Release();
@@ -491,6 +491,7 @@ SharedMemoryServer::~SharedMemoryServer()
 	// exit command
 	ulong buffer[1];
 	buffer[0] = 0;
+	
 	this->_messageQueue.send(buffer, sizeof(ulong), 0);
 
 	this->dispatcher.join();

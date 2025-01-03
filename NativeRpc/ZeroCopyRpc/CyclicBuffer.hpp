@@ -17,14 +17,20 @@ public:
     };
     struct  Accessor
     {
-        Entry* Item;
-        CyclicBuffer* Buffer;
+        Entry* Item = nullptr;
+        CyclicBuffer* Buffer = nullptr;
         template<typename T>
         T* As() const
         {
             return (T*)(Buffer->_memory.Get(Item->Offset));
         }
-
+        inline bool IsValid() { return Item != nullptr; }
+        inline uint32_t Size() { return Item->Size; }
+        inline uint64_t Type() { return Item->Type;  }
+        Accessor() : Item(nullptr), Buffer(nullptr)
+        {
+	        
+        }
         Accessor(const Accessor&) = delete;
         Accessor(Accessor&& other) noexcept : Item(other.Item), Buffer(other.Buffer) {
             other.Item = nullptr;

@@ -1,6 +1,4 @@
 [submodule "NativeRpc/external/googletest"]
 	path = NativeRpc/external/googletest
 	url = https://github.com/google/googletest.git
-[submodule "NativeRpc/external/boost"]
-	path = NativeRpc/external/boost
-	url = https://github.com/boostorg/boost.git
+

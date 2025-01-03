@@ -130,6 +130,40 @@ void NamedSemaphore::Acquire()
         }
 #endif
 }
+bool NamedSemaphore::TryAcquireFor(const std::chrono::milliseconds& timeout) {
+#ifdef _WIN32
+    // Convert timeout to milliseconds for Windows API
+    DWORD result = WaitForSingleObject(_handle, static_cast<DWORD>(timeout.count()));
+
+    if (result == WAIT_FAILED) {
+        throw std::system_error(GetLastError(), std::system_category(), "Failed to try acquire semaphore with timeout");
+    }
+    return result == WAIT_OBJECT_0;
+
+#else
+    // Use system clock for calculating absolute timeout
+    auto now = std::chrono::system_clock::now();
+    auto absTimeout = now + timeout;
+
+    // Convert to timespec for POSIX semaphores
+    timespec ts;
+    ts.tv_sec = std::chrono::duration_cast<std::chrono::seconds>(absTimeout.time_since_epoch()).count();
+    ts.tv_nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(absTimeout.time_since_epoch() % std::chrono::seconds(1)).count();
+
+    // Call POSIX sem_timedwait
+    int result = sem_timedwait(_handle, &ts);
+    if (result == 0) {
+        return true;  // Successfully acquired
+    }
+
+    if (errno == ETIMEDOUT) {
+        return false;  // Timeout occurred
+    }
+
+    // Handle other errors
+    throw std::system_error(errno, std::system_category(), "Failed to try acquire semaphore with timeout");
+#endif
+}
 
 bool NamedSemaphore::TryAcquire()
 {

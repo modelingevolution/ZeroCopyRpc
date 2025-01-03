@@ -8,7 +8,8 @@
 #include "ThreadSpin.h"
 
 #ifdef _WIN32
-	#include <windows.h>
+#include <WinSock2.h> 
+#include <windows.h>
 #else
 	#include <boost/interprocess/sync/named_semaphore.hpp>
 	#include <sys/eventfd.h>
