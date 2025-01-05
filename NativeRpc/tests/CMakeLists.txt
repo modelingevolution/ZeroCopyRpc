@@ -31,6 +31,7 @@ endif()
 
 # Include the Boost directory
 include_directories("${BOOST_ROOT}")
+link_directories("${BOOST_ROOT}/stage/lib")
 
 # Link the test executable with gtest and the main library
 if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
@@ -39,7 +40,8 @@ if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
 
 else()
 
-    target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc Boost::filesystem 
+    target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc 
+            Boost::filesystem 
             Boost::system 
             Boost::program_options 
             Boost::log 
