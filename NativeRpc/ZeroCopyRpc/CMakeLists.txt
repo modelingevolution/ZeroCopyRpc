@@ -61,7 +61,7 @@ else()
         pthread)
     
     add_definitions(-DBOOST_LOG_DYN_LINK)
-)
+
 endif()
 
 # Create an executable that uses the shared library
