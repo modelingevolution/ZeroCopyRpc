@@ -9,25 +9,7 @@ add_executable(ZeroCopyRpcTests  "ConcurrentDictionaryTests.cpp"
 "SpinWaitTests.cpp"  "../ZeroCopyRpc/StopWatch.cpp" "../ZeroCopyRpc/StopWatch.h" "ThreadSpinTests.cpp" 
 "StopWatchTests.cpp" "SyncLatencyTest.cpp"  "CyclicMemoryPoolTests.cpp" "ReplicationTests.cpp" "NamedSemaphoreTests.cpp")
 
-# Link the test executable with gtest and the main library
-if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
 
-    target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc)
-
-else()
-
-    target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc Boost::filesystem 
-            Boost::system 
-            Boost::program_options 
-            Boost::log 
-            Boost::log_setup 
-            Boost::thread
-            atomic 
-            pthread)
-
-    add_definitions(-DBOOST_LOG_DYN_LINK)
-
-endif()
 
 # Include directories
 file(GLOB ZERO_COPY_RPC_HEADERS "${CMAKE_SOURCE_DIR}/ZeroCopyRpc/*.h" "${CMAKE_SOURCE_DIR}/ZeroCopyRpc/*.hpp")
@@ -49,6 +31,26 @@ endif()
 
 # Include the Boost directory
 include_directories("${BOOST_ROOT}")
+
+# Link the test executable with gtest and the main library
+if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
+
+    target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc)
+
+else()
+
+    target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc Boost::filesystem 
+            Boost::system 
+            Boost::program_options 
+            Boost::log 
+            Boost::log_setup 
+            Boost::thread
+            atomic 
+            pthread)
+
+    add_definitions(-DBOOST_LOG_DYN_LINK)
+
+endif()
 
 # Enable testing
 enable_testing()
