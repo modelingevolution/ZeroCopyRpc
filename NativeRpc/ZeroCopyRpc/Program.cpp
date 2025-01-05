@@ -7,7 +7,9 @@
 #include "ShmReplicator.h"
 #include <iostream>
 #include <vector>
+#ifdef WIN32
 #include <conio.h>
+#endif
 #include "PeriodicTimer.h"
 #include "TestFrame.h"
 #include <iostream>
