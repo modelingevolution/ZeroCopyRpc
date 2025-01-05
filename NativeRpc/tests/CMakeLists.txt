@@ -6,9 +6,8 @@ cmake_minimum_required (VERSION 3.8)
 # Add the test executable
 add_executable(ZeroCopyRpcTests  "ConcurrentDictionaryTests.cpp" 
 "SharedMemoryServerTests.cpp" "IDPoolTests.cpp" "ConcurrentBugTests.cpp" "CyclicBufferTests.cpp" 
-"SpinWaitTests.cpp"  "../ZeroCopyRpc/StopWatch.cpp" "../ZeroCopyRpc/StopWatch.h" "ThreadSpinTests.cpp" 
+"SpinWaitTests.cpp"  "ThreadSpinTests.cpp" 
 "StopWatchTests.cpp" "SyncLatencyTest.cpp"  "CyclicMemoryPoolTests.cpp" "ReplicationTests.cpp" "NamedSemaphoreTests.cpp")
-
 
 
 # Include directories
@@ -39,8 +38,12 @@ if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
     target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc)
 
 else()
-
-    target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc 
+    find_package(Boost REQUIRED COMPONENTS filesystem system program_options log log_setup thread)
+    target_link_libraries(ZeroCopyRpcTests PRIVATE 
+            gtest 
+            gtest_main 
+            ZeroCopyRpc 
+            Boost::filesystem
             Boost::system 
             Boost::program_options 
             Boost::log 
