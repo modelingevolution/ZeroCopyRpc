@@ -103,9 +103,10 @@ public:
         
 
     void RemoveDanglingSubscriptionEntry(int i, SubscriptionSharedData& sub) const;
+    ulong MaxMessageSize();
     static bool ClearIfExists(const std::string& channel_name, const std::string& topic_name, 
-        unsigned int messageCount = 256, 
-        unsigned int bufferSize = 8*1024*1024);
+                              unsigned int messageCount = 256, 
+                              unsigned int bufferSize = 8*1024*1024);
     static bool TryRemove(const std::string& channel_name, const std::string& topic_name);
     TopicService(const std::string& channel_name, const std::string& topic_name, unsigned int messageCount, unsigned int bufferSize);
 
@@ -129,7 +130,7 @@ public:
 private:
     std::string _channelName;
     std::string _topicName;
-
+    ulong _maxMessageSize;
     // Client Semaphore table
     ConcurrentBag<Subscription, 256> _subscriptions;
     IDPool256 _idPool;
@@ -172,6 +173,7 @@ public:
     SharedMemoryServer(const std::string& channel);
 
     ~SharedMemoryServer();
+    
 
     static bool RemoveChannel(const std::string& channel);
     TopicService* CreateTopic(const std::string& topicName, 

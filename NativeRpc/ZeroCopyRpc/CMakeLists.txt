@@ -3,17 +3,19 @@
 
 # Add the shared library target
 add_library(ZeroCopyRpc SHARED
-    "SharedMemoryServer.cpp" "SharedMemoryServer.h"
-    "IDPool.hpp" "TypeDefs.h"
-    "Messages.h" "Random.h"
-    "SharedMemoryClient.h" "SharedMemoryClient.cpp"
-    "ProcessUtils.cpp" "Random.cpp"
- "TypeDefs.cpp" "ThreadSpin.h" "ThreadSpin.cpp" 
- "PeriodicTimer.h" 
- "PeriodicTimer.cpp" 
- "NamedSemaphore.h" "NamedSemaphore.cpp" "CrossPlatform.h" 
- "CrossPlatform.cpp" "ZeroCopyRpcException.h"
- "ZeroCopyRpcException.cpp" "ShmReplicator.h" "ShmReplicator.cpp" "ISharedMemoryClient.h" "TestFrame.h" "TestFrame.cpp")
+     "SharedMemoryServer.cpp" "SharedMemoryServer.h"
+     "IDPool.hpp" "TypeDefs.h"
+     "Messages.h" "Random.h"
+     "SharedMemoryClient.h" "SharedMemoryClient.cpp"
+     "ProcessUtils.cpp" "Random.cpp"
+     "TypeDefs.cpp" "ThreadSpin.h" "ThreadSpin.cpp" 
+     "PeriodicTimer.h" 
+     "PeriodicTimer.cpp" 
+     "NamedSemaphore.h" "NamedSemaphore.cpp" "CrossPlatform.h" 
+     "CrossPlatform.cpp" "ZeroCopyRpcException.h"
+     "ZeroCopyRpcException.cpp" "TcpReplicator.h" "TcpReplicator.cpp" 
+     "ISharedMemoryClient.h" "TestFrame.h" "TestFrame.cpp" 
+     "UdpReplicator.h" "UdpReplicator.cpp")
 target_compile_definitions(ZeroCopyRpc PRIVATE BUILD_DLL)
 
 target_include_directories(ZeroCopyRpc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

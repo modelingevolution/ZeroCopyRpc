@@ -8,22 +8,22 @@
 using boost::asio::ip::tcp;
 using namespace boost;
 using namespace boost::asio;
-struct ReplicateTopicMessage {
+struct TcpReplicationHeader {
     uint32_t TopicNameLength;
     // Topic name follows as char array
 };
-struct ReplicationMessage {
+struct TcpReplicationMessage {
     uint32_t Size;
     uint64_t Type;
     // Data follows
 };
-class ShmReplicationTarget;
+class TcpReplicationTarget;
 
 
 /// <summary>
 /// For scenarios where you want to replicate channels topic's over TCP.
 /// </summary>
-class EXPORT ShmReplicationSource {
+class EXPORT TcpReplicationSource {
 private:
     struct TopicReplicator {
         std::string TopicName;
@@ -45,17 +45,17 @@ private:
     void HandleReplicateSubscription(std::shared_ptr<tcp::socket> socket);
 
 public:
-    ShmReplicationSource(asio::io_context& io, const std::string& channelName,
+    TcpReplicationSource(asio::io_context& io, const std::string& channelName,
          uint16_t port);
 
-    ~ShmReplicationSource();
+    ~TcpReplicationSource();
 };
 
 /// <summary>
 /// For most scenarios, we spin ShmReplicatorTarget on a host that should replicate memory from the server
 /// just as if we were communicating through bare Shm using SharedMemoryServer and SharedMemoryClient.
 /// </summary>
-class EXPORT ShmReplicationTarget {
+class EXPORT TcpReplicationTarget {
 private:
     struct TopicReplicator {
         std::string TopicName;
@@ -75,12 +75,12 @@ private:
     void StartReplication(const std::string& topicName);
 
 public:
-    ShmReplicationTarget(asio::io_context& io, 
+    TcpReplicationTarget(asio::io_context& io, 
         std::shared_ptr<SharedMemoryServer> shmServer,
         
         const std::string& host, uint16_t port);
     bool Reconnect(const tcp::endpoint& peer_endpoint);
 
     void ReplicateTopic(const std::string& topicName);
-    ~ShmReplicationTarget();
+    ~TcpReplicationTarget();
 };

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "ShmReplicator.h"
+#include "TcpReplicator.h"
 #include <thread>
 #include <future>
 
@@ -17,8 +17,8 @@ protected:
     std::thread ioThread;
     std::unique_ptr<SharedMemoryServer> sourceServer;
     std::shared_ptr<SharedMemoryServer> targetReplicaServer;
-    std::unique_ptr<ShmReplicationSource> master;
-    std::unique_ptr<ShmReplicationTarget> slave;
+    std::unique_ptr<TcpReplicationSource> master;
+    std::unique_ptr<TcpReplicationTarget> slave;
 
     const std::string CH_SOURCE = "source";
     const std::string CH_REPLICA = "repl";
@@ -42,11 +42,11 @@ protected:
         sourceServer->CreateTopic(TOPIC_NAME);
 
         // Setup replication
-        master = std::make_unique<ShmReplicationSource>(io, CH_SOURCE,  5555);
+        master = std::make_unique<TcpReplicationSource>(io, CH_SOURCE,  5555);
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Allow master to start
 
         targetReplicaServer = std::make_shared<SharedMemoryServer>(CH_REPLICA);
-        slave = std::make_unique<ShmReplicationTarget>(io, targetReplicaServer, "127.0.0.1", 5555);
+        slave = std::make_unique<TcpReplicationTarget>(io, targetReplicaServer, "127.0.0.1", 5555);
         slave->ReplicateTopic(TOPIC_NAME);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Allow slave to connect
@@ -139,7 +139,7 @@ TEST_F(ReplicationTest, HandlesSlaveDisconnection) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     targetReplicaServer = std::make_shared<SharedMemoryServer>(CH_REPLICA);
-    slave = std::make_unique<ShmReplicationTarget>(io, targetReplicaServer,  "127.0.0.1", 5555);
+    slave = std::make_unique<TcpReplicationTarget>(io, targetReplicaServer,  "127.0.0.1", 5555);
     slave->ReplicateTopic(TOPIC_NAME);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 

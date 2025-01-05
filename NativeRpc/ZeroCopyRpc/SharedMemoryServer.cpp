@@ -118,6 +118,12 @@ void TopicService::RemoveDanglingSubscriptionEntry(int i, SubscriptionSharedData
 	NamedSemaphore::Remove(semName);
 	sub.PendingRemove.store(false);
 }
+
+ulong TopicService::MaxMessageSize()
+{
+	return _maxMessageSize;
+}
+
 bool TopicService::ClearIfExists(const std::string& channel_name, const std::string& topic_name, unsigned int messageCount, unsigned int bufferSize)
 {
 	try {
@@ -163,7 +169,8 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 	_channelName(channel_name),
 	_topicName(topic_name),
 	_shm(nullptr),
-	_region(nullptr)
+	_region(nullptr),
+	_maxMessageSize(bufferSize/messageCount*3/2)
 {
 	_shm = new shared_memory_object(open_or_create, ShmName(channel_name, topic_name).c_str(), read_write);
 

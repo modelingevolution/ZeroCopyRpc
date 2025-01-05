@@ -4,7 +4,8 @@
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/utility/setup/console.hpp>
-#include "ShmReplicator.h"
+#include <boost/url.hpp>
+
 #include <iostream>
 #include <vector>
 #ifdef WIN32
@@ -14,13 +15,45 @@
 #include "TestFrame.h"
 #include <iostream>
 #include <csignal>
+
+#include "TcpReplicator.h"
+#include "UdpReplicator.h"
 namespace po = boost::program_options;
 
+struct UrlInfo {
+    std::string protocol;
+    std::string host;
+    uint16_t port;
+};
 // Helper to split comma-separated topics into vector
 std::vector<std::string> parse_topics(const std::string& topics_str) {
     std::vector<std::string> topics;
     boost::split(topics, topics_str, boost::is_any_of(","));
     return topics;
+}
+UrlInfo parse_url(const std::string& url_str) {
+    auto result = boost::urls::parse_uri(url_str);
+    if (!result) {
+        throw std::runtime_error("Invalid URL format. Expected: protocol://host:port");
+    }
+
+    urls::url url = *result;
+
+    if (!url.has_scheme() || !url.has_port()) {
+        throw std::runtime_error("URL must contain protocol, host, and port");
+    }
+
+    std::string protocol = url.scheme();
+    if (protocol != "tcp" && protocol != "udp") {
+        throw std::runtime_error("Protocol must be either 'tcp' or 'udp'");
+    }
+
+    UrlInfo info;
+    info.protocol = protocol;
+    info.host = std::string(url.host());
+    info.port = static_cast<uint16_t>(std::stoi(std::string(url.port())));
+
+    return info;
 }
 void init_logging() {
    
@@ -48,16 +81,37 @@ int handle_replication_publish(const po::variables_map& vm) {
         global_io_context = &io;
         std::signal(SIGINT, signalHandler);
         auto channel = vm["channel"].as<std::string>();
-        auto host = vm["host"].as<std::string>();
-        auto port = vm["port"].as<uint16_t>();
+        auto url_info = parse_url(vm["url"].as<std::string>());
 
-        BOOST_LOG_TRIVIAL(info) << "Starting publisher for channel: " << channel
-            << " on " << host << ":" << port ;
-        BOOST_LOG_TRIVIAL(info) << "Waiting for subscription requests..." ;
+       
 
-        ShmReplicationSource source(io, channel, port);
-        executor_work_guard<io_context::executor_type> work_guard(io.get_executor());
-        io.run();
+        if (url_info.protocol == "tcp") {
+            BOOST_LOG_TRIVIAL(info) << "Starting publisher for channel: " << channel
+                << " listening on " << url_info.protocol << "://"
+                << url_info.host << ":" << url_info.port;
+            BOOST_LOG_TRIVIAL(info) << "Waiting for subscription requests...";
+
+            TcpReplicationSource source(io, channel, url_info.port);
+            executor_work_guard<io_context::executor_type> work_guard(io.get_executor());
+            io.run();
+        }
+        else if(url_info.protocol == "udp")
+        {
+            if (!vm.contains("topic"))
+                throw ZeroCopyRpcException("Topic is required when replication with udp protocol.");
+            auto topic = vm["topic"].as<std::string>();
+
+            BOOST_LOG_TRIVIAL(info) << "Starting publisher for channel: " << channel << " with data for topic: " << topic
+                << ", pushing data to remote: " << url_info.protocol << "://"
+                << url_info.host << ":" << url_info.port;
+
+            UdpReplicationSource source(io, channel, url_info.host, url_info.port);
+            source.ReplicateTopic(topic);
+
+            executor_work_guard<io_context::executor_type> work_guard(io.get_executor());
+            io.run();
+        }
+       
         return 0;
     }
     catch (const std::exception& e) {
@@ -73,20 +127,31 @@ int handle_replication_subscribe(const po::variables_map& vm) {
         std::signal(SIGINT, signalHandler);
 
         auto channel = vm["channel"].as<std::string>();
-        auto host = vm["host"].as<std::string>();
-        auto port = vm["port"].as<uint16_t>();
-        auto topics = parse_topics(vm["topics"].as<std::string>());
+        auto url_info = parse_url(vm["url"].as<std::string>());
+        
 
         BOOST_LOG_TRIVIAL(info) << "Starting subscriber for channel: " << channel
-            << " connecting to " << host << ":" << port;
+            << " connecting to " << url_info.protocol << "://"
+            << url_info.host << ":" << url_info.port;
 
         auto server = std::make_shared<SharedMemoryServer>(channel);
-        auto target = std::make_shared<ShmReplicationTarget>(
-            io, server, host, port);
 
-        for (const auto& topic : topics) {
-            BOOST_LOG_TRIVIAL(info) << "Subscribing to topic: " << topic;
-            target->ReplicateTopic(topic);
+        if (url_info.protocol == "tcp") {
+            auto target = std::make_shared<TcpReplicationTarget>(
+                io, server, url_info.host, url_info.port);
+
+            if (!vm.contains("topics"))
+                throw ZeroCopyRpcException("Topics parameter is required when subscribing with tcp protocol.");
+
+            auto topics = parse_topics(vm["topics"].as<std::string>());
+            for (const auto& topic : topics) {
+                BOOST_LOG_TRIVIAL(info) << "Subscribing to topic: " << topic;
+                target->ReplicateTopic(topic);
+            }
+        } else if(url_info.protocol == "udp")
+        {
+	        //TODO: not yet implemented;
+
         }
         executor_work_guard<io_context::executor_type> work_guard(io.get_executor());
         io.run();
@@ -296,13 +361,7 @@ int main(int argc, char* argv[]) {
         test_opts.add_options()
             ("test-command", po::value<std::string>(), "Subcommand (write or read)");
             
-        // Common options for replication commands
-        po::options_description common_opts("Common options");
-        common_opts.add_options()
-            ("channel", po::value<std::string>()->required(), "Channel name")
-            ("host", po::value<std::string>()->required(), "Host address")
-            ("port", po::value<uint16_t>()->required(), "Port number");
-
+       
         // Subscribe-specific options
         po::options_description subscribe_opts("Subscribe options");
         subscribe_opts.add_options()
@@ -329,14 +388,18 @@ int main(int argc, char* argv[]) {
             .run(), vm);
 
         if (vm.count("help") || argc == 1) {
-            std::cout << "Usage: zq <command> [options]\n\n"
+                std::cout << "Usage: zq <command> [options]\n\n"
                 << "Commands:\n"
                 << "  replication|-r <subcommand> [options]\n"
                 << "    Subcommands:\n"
                 << "      publish   - Start a publisher\n"
-                << "                  Required: --channel, --host, --port\n"
+                << "                  Required: --channel, \n"
+        	    << "                  Options: --url=tcp://host:port or --url=udp://host.port, --topics  \n"
+                << "                  Example: --url=tcp://localhost:5000\n"
                 << "      subscribe - Start a subscriber\n"
-                << "                  Required: --channel, --host, --port, --topics\n"
+                << "                  Required: --channel\n"
+                << "                  Options: --url=udp://host:port, --topics or --url=tcp://host:port \n"
+                << "                  Example: --url=tcp://localhost:5000\n"
                 << "  test <subcommand> [options]\n"
                 << "    Subcommands:\n"
                 << "      write     - Run write test\n"
@@ -346,9 +409,9 @@ int main(int argc, char* argv[]) {
                 << "                  Required: --channel, --topic\n"
                 << "  clear         - Clear a shared memory channel\n"
                 << "                  Required: --channel\n"
-        	    << "                  Options: --topic, --interactive=[true|false]\n\n"
+                << "                  Options: --topic\n\n"
                 << main_opts << "\n"
-                << common_opts << "\n"
+                
                 << subscribe_opts << "\n"
                 << test_opts << std::endl;
             return 0;
@@ -367,8 +430,8 @@ int main(int argc, char* argv[]) {
                         po::options_description publish_opts;
                         publish_opts.add_options()
                             ("channel", po::value<std::string>()->required(), "Channel name")
-                            ("host", po::value<std::string>()->required(), "Host address")
-                            ("port", po::value<uint16_t>()->required(), "Port number");
+                            ("url", po::value<std::string>()->required(), "Tcp listen url, or remote udp url.")
+                            ("topics", po::value<std::string>(), "Comma-separated list of topics to subscribe to");
 
                         po::store(po::command_line_parser(argc, argv)
                             .options(publish_opts)
@@ -383,10 +446,8 @@ int main(int argc, char* argv[]) {
                         po::options_description subscribe_opts;
                         subscribe_opts.add_options()
                             ("channel", po::value<std::string>()->required(), "Channel name")
-                            ("host", po::value<std::string>()->required(), "Host address")
-                            ("port", po::value<uint16_t>()->required(), "Port number")
-                            ("topics", po::value<std::string>()->required(),
-                                "Comma-separated list of topics to subscribe to");
+                            ("url", po::value<std::string>()->required(), "Tcp remote url, or listen udp url.")
+                            ("topics", po::value<std::string>(),"Comma-separated list of topics to subscribe to");
 
                         po::store(po::command_line_parser(argc, argv)
                             .options(subscribe_opts)

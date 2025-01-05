@@ -1,10 +1,10 @@
-#include "ShmReplicator.h"
+#include "TcpReplicator.h"
 
 #include <boost/log/trivial.hpp>
 
 #include "ZeroCopyRpcException.h"
 
-void ShmReplicationSource::AcceptLoop() {
+void TcpReplicationSource::AcceptLoop() {
 	while (_running) {
 		try {
 			auto socket = std::make_shared<tcp::socket>(_io);
@@ -26,7 +26,7 @@ void ShmReplicationSource::AcceptLoop() {
 		}
 	}
 }
-void ShmReplicationSource::HandleNewClient(std::shared_ptr<tcp::socket> socket) {
+void TcpReplicationSource::HandleNewClient(std::shared_ptr<tcp::socket> socket) {
 	try {
 		{
 			std::lock_guard lock(_clientsMutex);
@@ -40,8 +40,8 @@ void ShmReplicationSource::HandleNewClient(std::shared_ptr<tcp::socket> socket) 
 		_clientTopics.erase(socket);
 	}
 }
-void ShmReplicationSource::HandleReplicateSubscription(std::shared_ptr<tcp::socket> socket) {
-	ReplicateTopicMessage header;
+void TcpReplicationSource::HandleReplicateSubscription(std::shared_ptr<tcp::socket> socket) {
+	TcpReplicationHeader header;
 	asio::read(*socket, asio::buffer(&header, sizeof(header)));
 
 	std::vector<char> topicNameBuffer(header.TopicNameLength);
@@ -61,7 +61,7 @@ void ShmReplicationSource::HandleReplicateSubscription(std::shared_ptr<tcp::sock
 		});
 	replicator->ReplicationThread.detach();
 }
-void ShmReplicationSource::ReplicateLoop(std::shared_ptr<tcp::socket> socket,
+void TcpReplicationSource::ReplicateLoop(std::shared_ptr<tcp::socket> socket,
 	std::shared_ptr<TopicReplicator> replicator) {
 
 	while (replicator->Running && _running) {
@@ -71,7 +71,7 @@ void ShmReplicationSource::ReplicateLoop(std::shared_ptr<tcp::socket> socket,
 			if (!replicator->Running || !_running)
 				return;
 
-		ReplicationMessage header;
+		TcpReplicationMessage header;
 		header.Size = msg.Size();
 		header.Type = msg.Type();
 
@@ -88,7 +88,7 @@ void ShmReplicationSource::ReplicateLoop(std::shared_ptr<tcp::socket> socket,
 	}
 }
 
-ShmReplicationSource::ShmReplicationSource(asio::io_context& io,
+TcpReplicationSource::TcpReplicationSource(asio::io_context& io,
 	const std::string& channelName, uint16_t port)
 	: _io(io)
 	, _acceptor(io, tcp::endpoint(tcp::v4(), port))
@@ -100,7 +100,7 @@ ShmReplicationSource::ShmReplicationSource(asio::io_context& io,
 	acceptThread.detach();
 }
 
-ShmReplicationSource::~ShmReplicationSource() {
+TcpReplicationSource::~TcpReplicationSource() {
 	_running = false;
 	_acceptor.close();
 
@@ -113,16 +113,16 @@ ShmReplicationSource::~ShmReplicationSource() {
 }
 
 
-void ShmReplicationTarget::ReplicateLoop(std::shared_ptr<TopicReplicator> replicator) {
+void TcpReplicationTarget::ReplicateLoop(std::shared_ptr<TopicReplicator> replicator) {
 	auto topic = _shmServer->CreateTopic(replicator->TopicName);
 
 	tcp::endpoint peer_endpoint = _socket.remote_endpoint();
 
 	while (replicator->Running && _running) {
 		try {
-			ReplicationMessage header;
+			TcpReplicationMessage header;
 			auto rhs = asio::read(_socket, asio::buffer(&header, sizeof(header)));
-			if (rhs != sizeof(ReplicationMessage))
+			if (rhs != sizeof(TcpReplicationMessage))
 				throw ZeroCopyRpcException("Replication header message incomplete");
 
 			auto scope = topic->Prepare(header.Size, header.Type);
@@ -170,15 +170,15 @@ void ShmReplicationTarget::ReplicateLoop(std::shared_ptr<TopicReplicator> replic
 	}
 }
 
-void ShmReplicationTarget::StartReplication(const std::string& topicName) {
-	ReplicateTopicMessage msg;
+void TcpReplicationTarget::StartReplication(const std::string& topicName) {
+	TcpReplicationHeader msg;
 	msg.TopicNameLength = static_cast<uint32_t>(topicName.length());
 
 	asio::write(_socket, asio::buffer(&msg, sizeof(msg)));
 	asio::write(_socket, asio::buffer(topicName.data(), topicName.length()));
 }
 
-void ShmReplicationTarget::ReplicateTopic(const std::string& topicName) {
+void TcpReplicationTarget::ReplicateTopic(const std::string& topicName) {
 	auto replicator = std::make_shared<TopicReplicator>();
 	replicator->TopicName = topicName;
 
@@ -195,7 +195,7 @@ void ShmReplicationTarget::ReplicateTopic(const std::string& topicName) {
 	replicator->ReplicationThread.detach();
 }
 
-ShmReplicationTarget::ShmReplicationTarget(asio::io_context& io,
+TcpReplicationTarget::TcpReplicationTarget(asio::io_context& io,
 	std::shared_ptr<SharedMemoryServer> shmServer,
 	const std::string& host, uint16_t port)
 	: _io(io)
@@ -210,7 +210,7 @@ ShmReplicationTarget::ShmReplicationTarget(asio::io_context& io,
 	}
 }
 
-bool ShmReplicationTarget::Reconnect(const tcp::endpoint& peer_endpoint) {
+bool TcpReplicationTarget::Reconnect(const tcp::endpoint& peer_endpoint) {
 	while (true) {
 		try {
 			_socket.close();
@@ -232,7 +232,7 @@ bool ShmReplicationTarget::Reconnect(const tcp::endpoint& peer_endpoint) {
 	}
 }
 
-ShmReplicationTarget::~ShmReplicationTarget() {
+TcpReplicationTarget::~TcpReplicationTarget() {
 	_running = false;
 
 	{
