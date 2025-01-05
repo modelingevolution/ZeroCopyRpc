@@ -41,7 +41,6 @@ if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
 else()
 
     target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc 
-            Boost::filesystem 
             Boost::system 
             Boost::program_options 
             Boost::log 
