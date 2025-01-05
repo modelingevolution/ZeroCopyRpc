@@ -41,7 +41,7 @@ link_directories("${BOOST_ROOT}/stage/lib")
 
 set(Boost_USE_STATIC_LIBS OFF)
 # Find Boost libraries (set required components)
-find_package(Boost REQUIRED COMPONENTS filesystem system program_options log log_setup)
+find_package(Boost REQUIRED COMPONENTS filesystem system program_options log log_setup thread)
 
 
 
@@ -56,10 +56,12 @@ else()
         Boost::program_options 
         Boost::log 
         Boost::log_setup 
-        atomic 
-        Boost::log 
         Boost::thread
+        atomic 
         pthread)
+    
+    add_definitions(-DBOOST_LOG_DYN_LINK)
+)
 endif()
 
 # Create an executable that uses the shared library
