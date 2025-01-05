@@ -9,8 +9,6 @@ if (POLICY CMP0141)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
-add_compile_options(/wd4251 /wd4273)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -21,6 +19,8 @@ message(STATUS "CMake CXX Compiler ID: ${CMAKE_CXX_COMPILER_ID}")
 if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
     # MSVC-specific flags
     message("Setting flags for MSVC")
+    add_compile_options(/wd4251 /wd4273)
+
     string(REPLACE "/W3" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     set(CMAKE_CXX_FLAGS_DEBUG "/Od /RTC1 /MDd /D_DEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /Oi /Ot /GL /DNDEBUG /MD")
