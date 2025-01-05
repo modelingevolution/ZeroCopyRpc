@@ -50,7 +50,16 @@ if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
     target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup Boost::log)
 else()
     # LINUX
-    target_link_libraries(ZeroCopyRpc PRIVATE Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup atomic Boost::log)
+    target_link_libraries(ZeroCopyRpc PRIVATE 
+        Boost::filesystem 
+        Boost::system 
+        Boost::program_options 
+        Boost::log 
+        Boost::log_setup 
+        atomic 
+        Boost::log 
+        Boost::thread
+        pthread)
 endif()
 
 # Create an executable that uses the shared library
