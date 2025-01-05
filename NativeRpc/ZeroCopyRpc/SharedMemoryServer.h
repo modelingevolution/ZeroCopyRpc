@@ -173,7 +173,7 @@ public:
 
     ~SharedMemoryServer();
 
-    
+    static bool RemoveChannel(const std::string& channel);
     TopicService* CreateTopic(const std::string& topicName, 
         unsigned int messageCount = 256, 
         unsigned int bufferSize = 8*1024*1024);

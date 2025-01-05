@@ -13,7 +13,7 @@ add_library(ZeroCopyRpc SHARED
  "PeriodicTimer.cpp" 
  "NamedSemaphore.h" "NamedSemaphore.cpp" "CrossPlatform.h" 
  "CrossPlatform.cpp" "ZeroCopyRpcException.h"
- "ZeroCopyRpcException.cpp" "ShmReplicator.h" "ShmReplicator.cpp" "ISharedMemoryClient.h")
+ "ZeroCopyRpcException.cpp" "ShmReplicator.h" "ShmReplicator.cpp" "ISharedMemoryClient.h" "TestFrame.h" "TestFrame.cpp")
 target_compile_definitions(ZeroCopyRpc PRIVATE BUILD_DLL)
 
 target_include_directories(ZeroCopyRpc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -41,16 +41,16 @@ link_directories("${BOOST_ROOT}/stage/lib")
 
 set(Boost_USE_STATIC_LIBS OFF)
 # Find Boost libraries (set required components)
-find_package(Boost REQUIRED COMPONENTS filesystem system program_options)
+find_package(Boost REQUIRED COMPONENTS filesystem system program_options log log_setup)
 
 
 
 if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
     # WINDOWS
-    target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system)
+    target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup Boost::log)
 else()
     # LINUX
-    target_link_libraries(ZeroCopyRpc PRIVATE Boost::filesystem Boost::system atomic)
+    target_link_libraries(ZeroCopyRpc PRIVATE Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup atomic Boost::log)
 endif()
 
 # Create an executable that uses the shared library
@@ -59,7 +59,7 @@ add_executable(zq
 )
 
 # Link the executable to the shared library
-target_link_libraries(zq PRIVATE ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options)
+target_link_libraries(zq PRIVATE ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup)
 
 # Set output directories for the shared library
 set_target_properties(ZeroCopyRpc PROPERTIES

@@ -98,16 +98,5 @@
         }
       }
     }
-  ],
-  "testPresets": [
-    {
-      "name": "run-replicator",
-      "displayName": "Run Replicator with Arguments",
-      "configurePreset": "x64-debug",
-      "execution": {
-       
-      }
-    }
   ]
-
 }

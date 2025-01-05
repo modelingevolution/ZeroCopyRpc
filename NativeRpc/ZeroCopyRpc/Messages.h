@@ -36,7 +36,7 @@ struct CreateTopic
     }
     friend std::ostream& operator<<(std::ostream& os, const CreateTopic& obj)
     {
-        return os << "Name: " << obj.TopicName << " (capacity: " << obj.MaxMessageCount << ", size: " << obj.BufferSize << "B )";
+        return os << "Name: " << obj.TopicName << " Message Capacity: " << obj.MaxMessageCount << ", Buffer Size: " << obj.BufferSize << "B )";
     }
 };
 
@@ -152,7 +152,7 @@ struct SubscribeCommand {
     }
     friend std::ostream& operator<<(std::ostream& os, const SubscribeCommand& obj)
     {
-        return os << "Topic name: " << obj.TopicName << std::endl;
+        return os << "Topic name: " << obj.TopicName;
     }
 private:
 
@@ -160,15 +160,18 @@ private:
 
 struct TopicMetadata
 {
-    ulong BufferSize;
+    ulong TotalBufferSize;
     ulong SubscribesTableSize;
+    ulong BufferItemCapacity;
+    ulong BufferSize;
+
     ulong TotalSize()
     {
-        return sizeof(TopicMetadata) + BufferSize + SubscribesTableSize;
+        return sizeof(TopicMetadata) + TotalBufferSize + SubscribesTableSize;
     }
     void* MetadataAddress(void* base) { return base; }
     void* SubscribersTableAddress(void* base) { return (void*)((size_t)base + sizeof(TopicMetadata)); }
-    void* BuffserAddress(void* base) { return (void*)((size_t)base + sizeof(TopicMetadata) + SubscribesTableSize); }
+    void* BufferAddress(void* base) { return (void*)((size_t)base + sizeof(TopicMetadata) + SubscribesTableSize); }
 };
 
 #pragma pack(pop)

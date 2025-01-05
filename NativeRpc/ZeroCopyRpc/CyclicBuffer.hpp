@@ -3,11 +3,28 @@
 #include "CyclicMemoryPool.hpp"
 #include "Export.h"
 #include <iostream>
+#include <boost/log/trivial.hpp>
 
+#include "ZeroCopyRpcException.h"
 
 
 class  CyclicBuffer
 {
+public:
+    struct Entry;
+private:
+    struct State
+    {
+        std::atomic<ulong> _nextIndex;
+        std::atomic<ulong> _currentSize;
+        unsigned long _capacity;
+        
+        State(unsigned long capacity) : _capacity(capacity)
+        {
+        
+        }
+    };
+
 public:
     struct  Entry
     {
@@ -22,7 +39,7 @@ public:
         template<typename T>
         T* As() const
         {
-            return (T*)(Buffer->_memory.Get(Item->Offset));
+            return (T*)(Buffer->_memory->Get(Item->Offset));
         }
         inline bool IsValid() { return Item != nullptr; }
         inline uint32_t Size() { return Item->Size; }
@@ -51,7 +68,7 @@ public:
         {
         }
 
-        inline byte* Get() { return Buffer->_memory.Get(Item->Offset); }
+        inline byte* Get() { return Buffer->_memory->Get(Item->Offset); }
     };
     struct  WriterScope
     {
@@ -62,7 +79,14 @@ public:
             auto written = Span.CommitedSize();
             if (written > 0)
             {
-                _parent->_items[_parent->_nextIndex++ % _parent->_capacity] = Entry{ written, Type, Span.StartOffset() };
+	            auto nxAtm = _parent->_nextIndex;
+                ulong nx = nxAtm->load();
+            	unsigned long capacity = *_parent->_capacity;
+                	            
+                long prvSize = nx >= capacity ? _parent->_items[(nx - capacity) % capacity].Size : 0;
+                _parent->_state->_currentSize.fetch_add(static_cast<int64_t>(written) - static_cast<int64_t>(prvSize));
+                _parent->_items[nx % capacity] = Entry{ written, Type, Span.StartOffset() };
+                nxAtm->fetch_add(1);
             }
         }
         WriterScope(const WriterScope&) = delete;
@@ -89,15 +113,15 @@ public:
     /// </summary>
     struct Cursor
     {
-        unsigned long Index;
+        ulong Index;
         
-        unsigned long Remaining() const { return _parent->_nextIndex - Index - 1; }
+        ulong Remaining() const { return *_parent->_nextIndex - Index - 1; }
         Accessor Data() const
         {
-            auto item = &(_parent->_items[(Index) % _parent->_capacity]);
+            auto item = &(_parent->_items[(Index) % *_parent->_capacity]);
             return Accessor(item, _parent);
         }
-        Cursor(unsigned long index, CyclicBuffer* parent)
+        Cursor(ulong index, CyclicBuffer* parent)
             : Index(index),
             _parent(parent)
         {
@@ -107,7 +131,7 @@ public:
         bool TryRead()
         {
             //std::cout << "CLIENT: TryRead, parent->nextIndex: " << _parent->_nextIndex << " Cursor.Index: " << Index << std::endl;
-            auto diff = _parent->_nextIndex - Index;
+            auto diff = *_parent->_nextIndex - Index;
             if (diff > 1)
             {
                 //std::cout << "CLIENT: DIFF is positive, incrementing Index by 1." << std::endl;
@@ -131,7 +155,7 @@ public:
     };
     Cursor OpenCursor()
     {
-        return OpenCursor(_nextIndex);
+        return OpenCursor(*_nextIndex);
     }
     template<typename T, typename... Args>
     void Write(ulong type, Args&&... args) {
@@ -141,49 +165,96 @@ public:
         auto ptr = new (span.Start) T(std::forward<Args>(args)...);
         span.Commit(sizeof(T));
     }
+    // return size all items in the buffer, it is more than the size of the buffer, it means that some items had been overriden.
+    ulong BufferItemsSize()
+    {
+	    return _state->_currentSize.load();
+    }
     Cursor OpenCursor(ulong at)
     {
         return Cursor(at-1, this);
     }
     WriterScope WriteScope(ulong minSize, ulong type)
     {
-        auto span = _memory.GetWriteSpan(minSize);
+        auto span = _memory->GetWriteSpan(minSize);
         return WriterScope(std::move(span), type, this); // Explicitly use std::move for the span
     }
     ulong NextIndex() const
     {
-        return _nextIndex;
+        return *_nextIndex;
     }
 
+    bool Unlock()
+    {
+        return _memory->Unlock();
+    }
+   
+    
+
     CyclicBuffer(unsigned long capacity, unsigned long size) :
-        _external(false), _capacity(capacity), _memory(size)
+		_state(new State(capacity)),
+        _external(false),
+		_nextIndex(&_state->_nextIndex),
+		_capacity(&_state->_capacity),
+        _items(new Entry[capacity]),
+		_memory(new CyclicMemoryPool(size))
     {
-        _items = new Entry[capacity];
+        if (!_nextIndex->is_lock_free())
+            throw new ZeroCopyRpcException("Atomic<ulong> is not lock-free.");
+
+        _nextIndex->store(0);
     }
-    CyclicBuffer(byte* buffer, unsigned long capacity, unsigned long size) :
-	_external(true), _capacity(capacity), _items(nullptr),
-	_memory(buffer + MemoryPoolOffset(capacity), size)
+    // Invoked when buffer was already initialized and we need to rebuild local pointers and structures.
+    CyclicBuffer(byte* externalBuffer) :
+		_state((State*)externalBuffer),
+		_external(true),
+		_nextIndex(&_state->_nextIndex),
+        _capacity(&_state->_capacity),
+        _items((Entry*)(externalBuffer + ItemsOffset())),
+		_memory(new CyclicMemoryPool(externalBuffer + MemoryPoolOffset(_state->_capacity)))
     {
-        auto ptr = buffer + sizeof(CyclicBuffer);
-        _items =  new (ptr) Entry[capacity];
+        if (!_nextIndex->is_lock_free())
+            throw new ZeroCopyRpcException("Atomic<ulong> is not lock-free.");
     }
-    static size_t MemoryPoolOffset(unsigned long capacity) { return sizeof(CyclicBuffer) + capacity * sizeof(Entry); }
+    // Invoked when fresh new memory was allocated and we need to initialize structures
+    CyclicBuffer(byte* externalBuffer, unsigned long capacity, unsigned long size) :
+        _state(new (externalBuffer) State(capacity)),
+		_external(true),
+        _nextIndex(&_state->_nextIndex),
+		_capacity(&_state->_capacity),
+        _items((Entry*)(externalBuffer + ItemsOffset())),
+		_memory(new CyclicMemoryPool(externalBuffer + MemoryPoolOffset(capacity), size))
+    {
+        if (!_nextIndex->is_lock_free())
+            throw new ZeroCopyRpcException("Atomic<ulong> is not lock-free.");
+
+        _nextIndex->store(0);
+    }
+    static size_t ItemsOffset() { return sizeof(State); }
+    static size_t MemoryPoolOffset(unsigned long capacity) { return ItemsOffset() + capacity * sizeof(Entry); }
     static size_t SizeOf(unsigned long capacity, unsigned long size)
     {
-        return capacity * sizeof(Entry) + sizeof(CyclicBuffer) + CyclicMemoryPool::SizeOf(size);
+        return sizeof(State) + capacity * sizeof(Entry) + CyclicMemoryPool::SizeOf(size);
     }
     ~CyclicBuffer()
     {
 	    if(!_external)
 	    {
             delete[] _items;
+            delete _state;
 	    }
+        delete _memory;
     }
 private:
-    std::atomic<ulong> _nextIndex = 0;
+    State* _state;
     bool _external;
-    unsigned long _capacity;
-    Entry* _items;
-    CyclicMemoryPool _memory;
+    
+    std::atomic<ulong>* _nextIndex;
+    unsigned long* _capacity; // pointer to capacity in state
+    Entry* _items; // pointer to the same memory that is 
+
+    CyclicMemoryPool* _memory;
 };
+
+
 

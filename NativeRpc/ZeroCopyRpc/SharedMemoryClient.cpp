@@ -1,5 +1,5 @@
 #include "SharedMemoryClient.h"
-
+#include <boost/log/trivial.hpp>
 #include "ThreadSpin.h"
 #include "ZeroCopyRpcException.h"
 
@@ -45,7 +45,9 @@ _openCursorClientCount(0)
 	auto base = Region->get_address();
 	Metadata = (TopicMetadata*)base;
 	Subscribers = (SubscriptionSharedData*)Metadata->SubscribersTableAddress(base);
-	SharedBuffer = (CyclicBuffer*)Metadata->BuffserAddress(base);
+	
+	SharedBuffer = new CyclicBuffer((byte*)Metadata->BufferAddress(base));
+	
 }
 
 SharedMemoryClient::Topic::~Topic()
@@ -112,7 +114,7 @@ void SharedMemoryClient::DispatchResponses()
 				c.On(buffer);
 		}
 		else
-			std::cout << "No message has been received." << std::endl;
+			BOOST_LOG_TRIVIAL(debug) << "No messages has been received at dispatcher client thread.";
 	}
 }
 
@@ -277,9 +279,10 @@ std::string SharedMemoryClient::ClientQueueName(const std::string& channelName)
 
 SharedMemoryClient::SharedMemoryClient(const std::string& channelName):
 	_chName(channelName),
-	_srvQueue(open_only, channelName.c_str()),
+	_srvQueue(open_or_create, channelName.c_str(), 256,1024),
 	_clientQueue(create_only, ClientQueueName(channelName).c_str(), 256, 1024)
 {
+	
 	this->_dispatcher = std::thread([this]() { DispatchResponses(); });
 }
 
@@ -323,7 +326,7 @@ void SharedMemoryClient::Connect()
 	_messages.InsertOrUpdate(env.CorrelationId, c);
 	_srvQueue.send(&env, sizeof(HelloCommandEnvelope), 0);
 	auto value = std::unique_ptr<HelloResponseEnvelope>(promise.get_future().get());
-	std::cout << "Connected. It took: " << RequestDuration(value->Response) << std::endl;
+	BOOST_LOG_TRIVIAL(info) << "Connection established successfully. [" << RequestDuration(value->Response) << "]";
 }
 
 std::unique_ptr<ISubscriptionCursor> SharedMemoryClient::Subscribe(const std::string& topicName)

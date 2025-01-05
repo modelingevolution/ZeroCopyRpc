@@ -4,15 +4,24 @@
 class CyclicMemoryPool
 {
 private:
+    struct State;
+
+    State* _state;
     byte* _buffer;
-    size_t _offset;
-    unsigned long _size;
     bool _external;
-    std::atomic<bool> _inUse;
+    size_t *_offset;
+    unsigned long* _size;
+    std::atomic<bool>* _inUse;
 
-    size_t Remaining() const { return _size - _offset; }
+    size_t Remaining() const { return *_size - *_offset; }
 
-    
+    struct State
+    {
+        size_t _offset;
+        unsigned long _size;
+        std::atomic<bool> _inUse;
+        State(size_t size): _offset(0), _size(size), _inUse(false) {  }
+    };
 public:
 
     struct Span {
@@ -42,12 +51,12 @@ public:
                 throw std::runtime_error("Commit size exceeds reserved span.");
             }
             _committed += size;
-            _parent->_offset += size;  // Move parent pointer forward
+            (*_parent->_offset) += size;  // Move parent pointer forward
         }
 
         ~Span() {
             if (_parent) {
-                _parent->_inUse.store(false);  // Release the lock
+                _parent->_inUse->store(false);  // Release the lock
             }
         }
 
@@ -60,32 +69,74 @@ public:
    
     static size_t SizeOf(unsigned long size)
     {
-        return sizeof(CyclicMemoryPool) + size;
+        return sizeof(CyclicMemoryPool) + sizeof(State) + size;
     }
     ~CyclicMemoryPool()
     {
 	    if(!_external)
 	    {
             delete[] _buffer;
+            delete _state;
+            _state = nullptr;
             _buffer = nullptr;
 	    }
     }
-    CyclicMemoryPool(byte* buffer, unsigned long size) : _size(size),
-        _offset(0), _inUse(false), _external(true), _buffer(buffer + sizeof(CyclicMemoryPool)) {
+    /// <summary>
+    /// Returns true, if the collection had been locked.
+    /// </summary>
+    /// <returns></returns>
+    bool Unlock()
+    {
+        bool desired = false;
+        bool t = true;
+        return _inUse->compare_exchange_weak(t, desired);
+    }
+    // WHen we initialize structures;
+    CyclicMemoryPool(byte* externalBuffer, size_t size) : _state(new ((byte*)externalBuffer) State(size)),
+														 _buffer((byte*)(externalBuffer + sizeof(State))),
+                                                         _external(true),
+														 _offset(&_state->_offset),
+														 _size(&_state->_size),
+														 _inUse(&_state->_inUse) {
+        
+    }
+    // When won't initialize;
+    CyclicMemoryPool(byte* buffer) : _state((State*)buffer),
+        _buffer((byte*)(buffer + sizeof(State))),
+        _external(true),
+        _offset(&_state->_offset), _size(&_state->_size), _inUse(&_state->_inUse) {
 
     }
-    CyclicMemoryPool(unsigned long size) : _size(size),
-         _offset(0), _inUse(false), _buffer(nullptr), _external(false) {
-        _buffer = new byte[_size];
+    
+    CyclicMemoryPool(size_t size) :
+		_state(new State(size)),
+        _buffer(nullptr),
+        _external(false), _offset(&_state->_offset), _size(&_state->_size), _inUse(&_state->_inUse) {
+        _buffer = new byte[*_size];
     }
     byte* Get(size_t offset)
     {
         return _buffer + offset;
     }
-    size_t Size() const { return _size; }
-    byte* End() { return _buffer + _offset; }
+    template<typename T>
+	T* GetAs(size_t offset)
+    {
+        return (T*)(_buffer + offset);
+    }
+    size_t Size() const { return *_size; }
+    byte* End() { return _buffer + *_offset; }
+
+    template<typename T, typename... Args>
+    T* Write(Args&&... args)
+    {
+        auto scope = this->GetWriteSpan(sizeof(T));
+        auto ptr = new (scope.Start) T(std::forward<Args>(args)...);
+        scope.Commit(sizeof(T));
+        return ptr;
+    }
+
     Span GetWriteSpan(size_t minSize) {
-        if (minSize > _size) {
+        if (minSize > *_size) {
             throw std::runtime_error("Requested size exceeds buffer capacity.");
         }
 
@@ -93,16 +144,18 @@ public:
         bool expected = false;
 
         // Try to acquire the lock
-        if (!_inUse.compare_exchange_strong(expected, true)) {
+        if (!_inUse->compare_exchange_strong(expected, true)) {
             throw std::runtime_error("Buffer is already in use.");
         }
 
         // Check if there is enough space, or reset the pointer to reuse the buffer
         if (freeSpace < minSize) {
-            _offset = 0;
-            freeSpace = _size;
+            *_offset = 0;
+            freeSpace = *_size;
         }
 
         return Span(this->End(), freeSpace, this);
     }
 };
+
+

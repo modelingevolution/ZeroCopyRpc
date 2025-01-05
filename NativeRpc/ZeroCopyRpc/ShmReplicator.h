@@ -79,6 +79,7 @@ public:
         std::shared_ptr<SharedMemoryServer> shmServer,
         
         const std::string& host, uint16_t port);
+    bool Reconnect(const tcp::endpoint& peer_endpoint);
 
     void ReplicateTopic(const std::string& topicName);
     ~ShmReplicationTarget();

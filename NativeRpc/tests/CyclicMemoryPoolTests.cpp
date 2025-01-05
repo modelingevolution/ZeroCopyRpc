@@ -28,6 +28,15 @@ TEST_F(CyclicMemoryPoolTest, ExternalBufferConstruction) {
     EXPECT_EQ(extPool->Size(), DEFAULT_SIZE);
     EXPECT_NE(extPool->Get(0), nullptr);
 
+    // Check if we don't have seg-fault.
+    unsigned short* latestValue;
+    for(unsigned short i = 0 ; i < DEFAULT_SIZE*2; i++)
+    {
+        latestValue = extPool->Write<unsigned short>(i);
+    }
+    
+    EXPECT_EQ(*latestValue, DEFAULT_SIZE * 2 - 1);
+
     delete extPool;
     delete[] buffer;
 }

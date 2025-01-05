@@ -1,5 +1,7 @@
 ﻿#include "SharedMemoryServer.h"
 
+#include <boost/log/trivial.hpp>
+
 #include "ProcessUtils.h"
 #include "ZeroCopyRpcException.h"
 
@@ -14,7 +16,7 @@ void TopicService::Subscription::OpenOrCreate(const std::string& semName, byte i
 	this->Name = new std::string(semName);
 	this->Sem = new NamedSemaphore(semName, NamedSemaphore::OpenMode::OpenOrCreate, 0);
 	this->Index = index;
-	std::cout << "named semaphore created: " << semName << std::endl;
+	//std::cout << "named semaphore created: " << semName << std::endl;
 }
 
 TopicService::Subscription::Subscription(const std::string& semName, byte index): Sem(nullptr), Name(nullptr)
@@ -22,7 +24,7 @@ TopicService::Subscription::Subscription(const std::string& semName, byte index)
 	this->Name = new std::string(semName);
 	this->Sem = new NamedSemaphore( semName, NamedSemaphore::OpenMode::Create, 0);
 	this->Index = index;
-	std::cout << "named semaphore created: " << semName << std::endl;
+	//std::cout << "named semaphore created: " << semName << std::endl;
 }
 
 void TopicService::Subscription::Close()
@@ -124,7 +126,9 @@ bool TopicService::ClearIfExists(const std::string& channel_name, const std::str
 		shm.get_size(size);
 		TopicMetadata m = {
 			CyclicBuffer::SizeOf(messageCount, bufferSize),
-			sizeof(SubscriptionSharedData) * messageCount };
+			sizeof(SubscriptionSharedData) * 256,
+		messageCount,
+			bufferSize };
 
 		if (size > 0)
 		{
@@ -161,12 +165,13 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 	_shm(nullptr),
 	_region(nullptr)
 {
-	std::cout << "Creating topic: " << channel_name << "." << topic_name << std::endl;
 	_shm = new shared_memory_object(open_or_create, ShmName(channel_name, topic_name).c_str(), read_write);
 
 	TopicMetadata m = {
 		CyclicBuffer::SizeOf(messageCount,bufferSize),
-		sizeof(SubscriptionSharedData) * 256 };
+		sizeof(SubscriptionSharedData) * 256,
+		messageCount,
+		bufferSize};
 	offset_t size;
 	_shm->get_size(size);
 
@@ -181,17 +186,22 @@ TopicService::TopicService(const std::string& channel_name, const std::string& t
 		*metadata = m; // copy
 
 		_subscribers = (SubscriptionSharedData*)m.SubscribersTableAddress(dst);
-		auto bufferPtr = (byte*)m.BuffserAddress(dst);
-		_buffer = new (bufferPtr) CyclicBuffer(bufferPtr,messageCount, bufferSize);
+		_buffer = new CyclicBuffer(static_cast<byte*>(m.BufferAddress(dst)),messageCount, bufferSize);
 	}
 	else
 	{
+		BOOST_LOG_TRIVIAL(info) << "Channel's '" << channel_name << "' shared memory buffer for topic " << topic_name << " found, we'll reuse it.";
 		_region = new mapped_region(*_shm, read_write);
 		auto dst = _region->get_address();
 		auto& m = *(TopicMetadata*)dst;
 		_subscribers = (SubscriptionSharedData*)m.SubscribersTableAddress(dst);
-		_buffer = (CyclicBuffer*)m.BuffserAddress(dst);
 
+		_buffer = new CyclicBuffer(static_cast<byte*>(m.BufferAddress(dst)));
+		
+		if(_buffer->Unlock())
+		{
+			BOOST_LOG_TRIVIAL(warning) << "Buffer was unlocked.";
+		}
 		// now we should rebuild Subscribers table.
 		for(int i = 0; i < 256; i++)
 		{
@@ -261,9 +271,11 @@ PublishScope TopicService::Prepare(ulong minSize, ulong type)
 
 TopicService::~TopicService()
 {
+	delete _buffer;
+	_buffer = nullptr;
 	delete _region;
 	_region = nullptr;
-
+	
 	if (_shm != nullptr)
 	{
 		if(this->_subscriptions.empty())
@@ -271,6 +283,7 @@ TopicService::~TopicService()
 		delete _shm;
 		_shm = nullptr;
 	}
+	
 }
 
 bool TopicService::Unsubscribe(pid_t pid, byte id) const
@@ -380,29 +393,29 @@ void SharedMemoryServer::DispatchMessages()
 			case 1:
 				{
 					auto& env = *(SubscribeCommandEnvelope*)buffer;
-					std::cout << "Subscribe to topic, " << env.Request << std::endl;
+					BOOST_LOG_TRIVIAL(debug) << "Handling subscribe to topic from PID: " << env.Pid << ", " << env.Request;
 					SubscribeResponseEnvelope rsp;
 					rsp.CorrelationId = env.CorrelationId;
 					rsp.Response.Id = this->Subscribe(env.Request.TopicName, env.Pid);
 					if(!GetClient(env.Pid)->try_send(&rsp, sizeof(SubscribeResponseEnvelope), 0))
 					{
-						std::cout << "Cannot send message to client." << std::endl;
+						BOOST_LOG_TRIVIAL(error) << "Cannot send message to client.";
 					}
-
+					BOOST_LOG_TRIVIAL(info) << "Topic '" << env.Request.TopicName << "' subscribed from PID: " << env.Pid;
 					break;
 				}
 			case 2:
 				{
 					auto& env= *(CreateSubscriptionEnvelope*)buffer;
 					auto &rqt = env.Request;
-					std::cout << "Create Topic, " << &rqt << std::endl;
+					BOOST_LOG_TRIVIAL(debug) << "Handling CreateTopic command: " << rqt;
 					env.Set(this->OnCreateTopic(rqt.TopicName, rqt.MaxMessageCount, rqt.BufferSize));
 					break;
 				}
 			case 3:
 				{
 					auto& env = *(HelloCommandEnvelope*)buffer;
-					std::cout << "Hello request from Pid: " << env.Pid << std::endl;
+					BOOST_LOG_TRIVIAL(debug) << "Handling HelloCommand from PID: " << env.Pid;
 					this->OnHelloResponse(env.Pid, env.Request.Created, env.CorrelationId);
 					break;
 				}
@@ -413,7 +426,7 @@ void SharedMemoryServer::DispatchMessages()
 					message_queue* m = GetClient(env.Pid);
 					if (m == nullptr)
 					{
-						std::cout << "Cannot find message queue for client: " << env.Pid << std::endl;
+						BOOST_LOG_TRIVIAL(error) << "Cannot find message queue for client PID: " << env.Pid;
 						continue;
 					}
 
@@ -430,7 +443,7 @@ void SharedMemoryServer::DispatchMessages()
 			case 8:
 				{
 				auto& env = *(RemoveSubscriptionEnvelope*)buffer;
-				std::cout << "Remove subscription, " << env.Request << std::endl;
+				BOOST_LOG_TRIVIAL(info) << "Remove subscription, " << env.Request;
 				env.Set(this->RemoveSubscription(env.Request.TopicName));
 				break;
 				}
@@ -440,8 +453,9 @@ void SharedMemoryServer::DispatchMessages()
 			}
 		}
 		else
-			std::cout << "No message has been received." << std::endl;
+			BOOST_LOG_TRIVIAL(debug) << "No messages has been received at server dispatcher thread.";
 	}
+	BOOST_LOG_TRIVIAL(debug) << "Shared memory server's dispatcher thread exited.";
 }
 
 bool SharedMemoryServer::RemoveSubscription(const char* topicName)
@@ -481,7 +495,8 @@ TopicService* SharedMemoryServer::OnCreateTopic(const char* topicName, unsigned 
 	//delete promise;
 }
 
-SharedMemoryServer::SharedMemoryServer(const std::string& channel): _chName(channel), _messageQueue(open_or_create, channel.c_str(), 128, 512)
+SharedMemoryServer::SharedMemoryServer(const std::string& channel): _chName(channel),
+_messageQueue(open_or_create, channel.c_str(), 256, 1024)
 {
 	this->dispatcher = std::thread([this]() { DispatchMessages(); });
 }
@@ -494,16 +509,25 @@ SharedMemoryServer::~SharedMemoryServer()
 	
 	this->_messageQueue.send(buffer, sizeof(ulong), 0);
 
-	this->dispatcher.join();
+	if(this->dispatcher.joinable())
+		this->dispatcher.join();
 
 	for (const auto& t : _topics | std::views::values)
+	{
 		delete t;
+	}
 
 	// If there are no topics, we can safely remote communication channel.
 	if (_topics.empty())
 		message_queue::remove(this->_chName.c_str());
 
 	_topics.clear();
+	BOOST_LOG_TRIVIAL(info) << "Shared Memory Server closed.";
+}
+
+bool SharedMemoryServer::RemoveChannel(const std::string& channel)
+{
+	return message_queue::remove(channel.c_str());
 }
 
 bool SharedMemoryServer::RemoveTopic(const std::string& topicName)

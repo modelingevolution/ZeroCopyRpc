@@ -1,5 +1,7 @@
 #include "ShmReplicator.h"
 
+#include <boost/log/trivial.hpp>
+
 #include "ZeroCopyRpcException.h"
 
 void ShmReplicationSource::AcceptLoop() {
@@ -17,7 +19,10 @@ void ShmReplicationSource::AcceptLoop() {
 			if (error_code == asio::error::operation_aborted ||
 				error_code == asio::error::interrupted)
 				return;
-			throw;
+
+			// Log and retry
+			std::cerr << "Accept loop error: " << e.what() << ". Retrying...\n";
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 	}
 }
@@ -27,9 +32,8 @@ void ShmReplicationSource::HandleNewClient(std::shared_ptr<tcp::socket> socket) 
 			std::lock_guard lock(_clientsMutex);
 			_clientTopics[socket] = std::vector<std::shared_ptr<TopicReplicator>>();
 		}
-		while (_running) {
-			HandleReplicateSubscription(socket);
-		}
+		
+		HandleReplicateSubscription(socket);
 	}
 	catch (...) {
 		std::lock_guard lock(_clientsMutex);
@@ -108,8 +112,11 @@ ShmReplicationSource::~ShmReplicationSource() {
 	}
 }
 
+
 void ShmReplicationTarget::ReplicateLoop(std::shared_ptr<TopicReplicator> replicator) {
 	auto topic = _shmServer->CreateTopic(replicator->TopicName);
+
+	tcp::endpoint peer_endpoint = _socket.remote_endpoint();
 
 	while (replicator->Running && _running) {
 		try {
@@ -130,11 +137,35 @@ void ShmReplicationTarget::ReplicateLoop(std::shared_ptr<TopicReplicator> replic
 		}
 		catch (const boost::system::system_error& e) {
 			auto error_code = e.code();
-			if (error_code == asio::error::eof ||
-				error_code == asio::error::connection_reset ||
-				error_code == asio::error::connection_aborted)
+			if (error_code == asio::error::connection_aborted )
+			{
+				BOOST_LOG_TRIVIAL(info) << "Connection aborted";
 				return;
-			throw;
+			}
+			else if (error_code == asio::error::eof ||                    // End-of-file
+				error_code == asio::error::connection_reset ||       // TCP connection reset by peer
+				error_code == asio::error::connection_aborted ||     // Connection aborted
+				error_code == asio::error::broken_pipe) {            // Broken pipe
+				BOOST_LOG_TRIVIAL(error) << "Connection issue detected: " << e.what()
+					<< ". Attempting to reconnect...\n";
+
+				// Attempt reconnection
+				if (Reconnect(peer_endpoint)) {
+					BOOST_LOG_TRIVIAL(error) << "Reconnection successful. Restarting replication for topic: "
+						<< replicator->TopicName << "\n";
+
+					// Resubscribe to the topic after reconnection
+					StartReplication(replicator->TopicName);
+				}
+				else {
+					std::cerr << "Failed to reconnect. Terminating replication.\n";
+					return; // Exit if reconnection fails
+				}
+			}
+			else {
+				// For any other errors, propagate upwards
+				throw;
+			}
 		}
 	}
 }
@@ -170,9 +201,35 @@ ShmReplicationTarget::ShmReplicationTarget(asio::io_context& io,
 	: _io(io)
 	, _socket(io)
 	, _shmServer(shmServer) {
+	tcp::endpoint peer_endpoint(asio::ip::make_address(host), port);
 
-	_socket.connect(tcp::endpoint(
-		asio::ip::make_address(host), port));
+	if(!Reconnect(peer_endpoint))
+	{
+		BOOST_LOG_TRIVIAL(error) << "Cannot connect, exiting.";
+		throw ZeroCopyRpcException("Cannot connect.");
+	}
+}
+
+bool ShmReplicationTarget::Reconnect(const tcp::endpoint& peer_endpoint) {
+	while (true) {
+		try {
+			_socket.close();
+			_socket.connect(peer_endpoint);
+			BOOST_LOG_TRIVIAL(error) << "Reconnected to peer.\n";
+			return true;
+		}
+		catch (const boost::system::system_error& e) {
+			auto error_code = e.code();
+			if (error_code == asio::error::connection_refused ||
+				error_code == asio::error::timed_out) {
+				BOOST_LOG_TRIVIAL(error) << "Reconnection attempt failed: " << e.what() << ". Retrying...\n";
+				std::this_thread::sleep_for(std::chrono::seconds(5));
+			}
+			else {
+				return false;
+			}
+		}
+	}
 }
 
 ShmReplicationTarget::~ShmReplicationTarget() {
