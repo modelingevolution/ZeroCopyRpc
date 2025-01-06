@@ -105,8 +105,8 @@ int handle_replication_publish(const po::variables_map& vm) {
                 << ", pushing data to remote: " << url_info.protocol << "://"
                 << url_info.host << ":" << url_info.port;
 
-            UdpReplicationSource source(io, channel, url_info.host, url_info.port);
-            source.ReplicateTopic(topic);
+            UdpReplicationSource source(io, channel);
+            source.ReplicateTopic(topic, url_info.host, url_info.port);
 
             executor_work_guard<io_context::executor_type> work_guard(io.get_executor());
             io.run();
@@ -148,14 +148,25 @@ int handle_replication_subscribe(const po::variables_map& vm) {
                 BOOST_LOG_TRIVIAL(info) << "Subscribing to topic: " << topic;
                 target->ReplicateTopic(topic);
             }
-        } else if(url_info.protocol == "udp")
-        {
-	        //TODO: not yet implemented;
-
+            executor_work_guard<io_context::executor_type> work_guard(io.get_executor());
+            io.run();
+            return 0;
         }
-        executor_work_guard<io_context::executor_type> work_guard(io.get_executor());
-        io.run();
-        return 0;
+    	else if(url_info.protocol == "udp")
+        {
+            if (!vm.contains("topic"))
+                throw ZeroCopyRpcException("Topic parameter is required when subscribing with udp protocol.");
+
+            auto topic = vm["topic"].as<std::string>();
+            
+            auto target = std::make_shared<UdpReplicationTarget>(io, server,url_info.host, url_info.port);
+            target->ReplicateTopic(topic);
+            executor_work_guard<io_context::executor_type> work_guard(io.get_executor());
+            io.run();
+            return 0;
+        }
+        
+        return 2;
     }
     catch (const std::exception& e) {
         BOOST_LOG_TRIVIAL(error) << "Error in subscriber: " << e.what();
@@ -431,7 +442,8 @@ int main(int argc, char* argv[]) {
                         publish_opts.add_options()
                             ("channel", po::value<std::string>()->required(), "Channel name")
                             ("url", po::value<std::string>()->required(), "Tcp listen url, or remote udp url.")
-                            ("topics", po::value<std::string>(), "Comma-separated list of topics to subscribe to");
+                            ("topics", po::value<std::string>(), "Comma-separated list of topics to subscribe to")
+                            ("topic", po::value<std::string>(), "Required topic when published with UDP");
 
                         po::store(po::command_line_parser(argc, argv)
                             .options(publish_opts)
@@ -447,7 +459,8 @@ int main(int argc, char* argv[]) {
                         subscribe_opts.add_options()
                             ("channel", po::value<std::string>()->required(), "Channel name")
                             ("url", po::value<std::string>()->required(), "Tcp remote url, or listen udp url.")
-                            ("topics", po::value<std::string>(),"Comma-separated list of topics to subscribe to");
+                            ("topics", po::value<std::string>(),"Comma-separated list of topics to subscribe to")
+                            ("topic", po::value<std::string>(), "Required topic when subscribed with UDP");
 
                         po::store(po::command_line_parser(argc, argv)
                             .options(subscribe_opts)

@@ -318,6 +318,11 @@ CyclicMemoryPool::Span& PublishScope::Span()
 	CyclicMemoryPool::Span &p  = _scope.Span; return p;
 }
 
+void PublishScope::ChangeType(uint64_t type)
+{
+	_scope.Type = type;
+}
+
 byte SharedMemoryServer::Subscribe(const char* topicName, pid_t pid)
 {
 	// construct std::string out of str,

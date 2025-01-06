@@ -68,6 +68,7 @@ struct EXPORT PublishScope
     PublishScope() = default;
     PublishScope(CyclicBuffer::WriterScope&& w, TopicService* parent);
     CyclicMemoryPool::Span& Span();
+    void ChangeType(uint64_t type);
     PublishScope(const PublishScope& other) = delete;
     ulong Type() const;
 
