@@ -5,17 +5,12 @@
 #include "SharedMemoryServer.h"
 #include <boost/asio.hpp>
 #include "Export.h"
+#include "UdpReplicationMessages.h"
 
 using boost::asio::ip::udp;
 using namespace boost;
 using namespace boost::asio;
 
-
-struct UdpReplicationMessage {
-    uint32_t Size;
-    uint64_t Type;
-    // Data follows
-};
 
 class EXPORT UdpReplicationSource {
 private:

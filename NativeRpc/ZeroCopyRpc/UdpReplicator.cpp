@@ -11,9 +11,8 @@ void UdpReplicationSource::ReplicateLoop(std::shared_ptr<TopicReplicator> replic
             if (!replicator->Running || !_running)
                 return;
 
-        UdpReplicationMessage header;
-        header.Size = msg.Size();
-        header.Type = msg.Type();
+        UdpReplicationMessageHeader header(msg.Size(), msg.Type());
+        
 
         try {
             // Create a scatter/gather array for sending both header and data in one datagram
@@ -86,7 +85,7 @@ void UdpReplicationTarget::ReplicateLoop(std::shared_ptr<TopicReplicator> replic
     while (replicator->Running && _running) {
         try {
             udp::endpoint sender_endpoint;
-            UdpReplicationMessage  header;
+            UdpReplicationMessageHeader  header;
             size_t bytesReceived = 0;
             // Prepare space in shared memory
             {
@@ -103,10 +102,10 @@ void UdpReplicationTarget::ReplicateLoop(std::shared_ptr<TopicReplicator> replic
                 bytesReceived = _socket.receive_from(buffers, sender_endpoint);
 
 
-                if (bytesReceived < sizeof(UdpReplicationMessage))
+                if (bytesReceived < sizeof(UdpReplicationMessageHeader))
                     throw ZeroCopyRpcException("Replication message incomplete.");
 
-                size_t dataSize = bytesReceived - sizeof(UdpReplicationMessage);
+                size_t dataSize = bytesReceived - sizeof(UdpReplicationMessageHeader);
                 if (dataSize != header.Size)
                     throw ZeroCopyRpcException("Data size mismatch");
 

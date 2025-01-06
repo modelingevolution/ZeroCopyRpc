@@ -15,7 +15,7 @@ add_library(ZeroCopyRpc SHARED
      "CrossPlatform.cpp" "ZeroCopyRpcException.h"
      "ZeroCopyRpcException.cpp" "TcpReplicator.h" "TcpReplicator.cpp" 
      "ISharedMemoryClient.h" "TestFrame.h" "TestFrame.cpp" 
-     "UdpReplicator.h" "UdpReplicator.cpp")
+     "UdpReplicator.h" "UdpReplicator.cpp" "UdpFrameProcessor.h" "UdpFrameProcessor.cpp" "UdpReplicationMessages.h" "UdpReplicationMessages.cpp" "UdpFrameDefragmentator.h")
 target_compile_definitions(ZeroCopyRpc PRIVATE BUILD_DLL)
 
 target_include_directories(ZeroCopyRpc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
