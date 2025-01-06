@@ -12,7 +12,7 @@ protected:
 
     UdpFrameDefragmentatorTest()
         : cyclicBuffer(BUFFER_CAPACITY, BUFFER_SIZE),
-        defragmentator(std::make_unique<UdpFrameDefragmentator>(cyclicBuffer)) {
+        defragmentator(std::make_unique<UdpFrameDefragmentator>(cyclicBuffer,4+ sizeof(UdpReplicationMessageHeader))) {
     }
 
     void SetUp() override {
@@ -40,10 +40,10 @@ std::vector<byte> CreateFragment(uint64_t created, uint32_t size, uint16_t seque
 TEST_F(UdpFrameDefragmentatorTest, SingleFragmentFrame) {
     // Prepare a single-frame message
     uint64_t created = 1234567890; // Example timestamp
-    uint32_t size = 7;            // Payload size
     uint16_t sequence = 0;        // Frame sequence
     uint8_t type = 0;             // Message type
-    std::vector<byte> data = { 'H', 'e', 'l', 'l', 'o', '!', '\0' };
+    std::vector<byte> data = { 's', 'e', 'x', };
+    uint32_t size = data.size(); // Payload size
     auto fragment = CreateFragment(created, size, sequence, type, data);
 
     auto cursor = cyclicBuffer.OpenCursor();
@@ -68,13 +68,15 @@ TEST_F(UdpFrameDefragmentatorTest, SingleFragmentFrame) {
 TEST_F(UdpFrameDefragmentatorTest, MultipleFragmentFrame) {
     // Simulate sending multiple fragments
     uint64_t created = 1234567890; // Example timestamp
-    uint32_t totalSize = 13;       // Total payload size
+    
     uint16_t sequence = 0;         // Frame sequence
     uint8_t type = 0;              // Message type
 
-    std::vector<byte> part1 = { 'H', 'e', 'l' };
-    std::vector<byte> part2 = { 'l', 'o', ',', ' ' };
-    std::vector<byte> part3 = { 'W', 'o', 'r', 'l', 'd', '!', '\0' };
+    std::vector<byte> part1 = { 'H', 'e', 'l', 'l'};
+    std::vector<byte> part2 = { 'o', ',', ' ', 'W' };
+    std::vector<byte> part3 = { 'o', 'r', 'l', 'd' };
+
+    uint32_t totalSize = part1.size() + part2.size() + part3.size();       // Total payload size
 
     auto fragment1 = CreateFragment(created, totalSize, sequence++, type, part1);
     auto fragment2 = CreateFragment(created, totalSize, sequence++, type, part2);
@@ -93,8 +95,10 @@ TEST_F(UdpFrameDefragmentatorTest, MultipleFragmentFrame) {
     auto accessor = cursor.Data();
 
     // Check for correctness
-    std::vector<byte> expectedData = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd', '!', '\0' };
-    auto* reassembledData = accessor.As<std::vector<byte>>();
-    ASSERT_EQ(expectedData, *reassembledData);
+    std::vector<byte> expectedData = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'W', 'o', 'r', 'l', 'd' };
+    auto* reassembledData = accessor.Get();
+    uint32_t reassembledDataSize = accessor.Size();
+    auto reassembledVector = std::vector<byte>(reassembledData, reassembledData + reassembledDataSize);
+    ASSERT_EQ(expectedData, reassembledVector);
     ASSERT_EQ(expectedData.size(), accessor.Size());
 }

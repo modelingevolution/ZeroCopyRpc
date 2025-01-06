@@ -34,17 +34,21 @@ private:
     uint64_t previousFrameCreated_;
     static constexpr uint16_t MAX_NEXT_FRAME_MESSAGES = 16;
     uint16_t nextFrameMessages_;
+    const size_t mtu_;
+    const size_t maxPayloadSize_; // MTU - header size
 
 public:
-    explicit UdpFrameDefragmentator(CyclicBuffer& buffer)
+    explicit UdpFrameDefragmentator(CyclicBuffer& buffer, size_t mtu)
         : buffer_(buffer)
         , currentFrameCreated_(0)
         , previousFrameCreated_(0)
         , nextFrameMessages_(0)
+        , mtu_(mtu)
+        , maxPayloadSize_(mtu - sizeof(UdpReplicationMessageHeader))
     {
     }
-    bool ProcessFragment(const uint8_t* msgData, size_t msgSize)
-    {
+
+    bool ProcessFragment(const uint8_t* msgData, size_t msgSize) {
         UdpReplicationMessageHeader* header = (UdpReplicationMessageHeader*)msgData;
         uint8_t* dataPtr = (uint8_t*)msgData + sizeof(UdpReplicationMessageHeader);
         size_t dataSize = msgSize - sizeof(UdpReplicationMessageHeader);
@@ -52,8 +56,7 @@ public:
     }
 
     bool ProcessFragment(const UdpReplicationMessageHeader& header, const uint8_t* data, size_t dataSize) {
-        bool frameCompleted = false;
-
+        // If header.Size equals dataSize, we have a complete message
         if (header.Size == dataSize) {
             auto scope = buffer_.WriteScope(header.Size, header.Type);
             std::memcpy(scope.Span.Start, data, dataSize);
@@ -63,23 +66,21 @@ public:
 
         // Handle previous frame fragments
         if (previousFrame_ && header.Created == previousFrameCreated_) {
-            frameCompleted = processFrameFragment(*previousFrame_, header, data, dataSize);
+            bool frameCompleted = processFrameFragment(*previousFrame_, header, data, dataSize);
             if (frameCompleted) {
-                previousFrame_.reset(); // Previous frame is complete, clean it up
+                previousFrame_.reset();
             }
             return frameCompleted;
         }
 
         // Handle current frame fragments
         if (currentFrame_ && header.Created == currentFrameCreated_) {
-            frameCompleted = processFrameFragment(*currentFrame_, header, data, dataSize);
-            return frameCompleted;
+            return processFrameFragment(*currentFrame_, header, data, dataSize);
         }
 
         // Handle new frame
         if (header.Created > currentFrameCreated_) {
             if (currentFrame_) {
-                // Move current to previous if it exists
                 previousFrame_ = std::move(currentFrame_);
                 previousFrameCreated_ = currentFrameCreated_;
                 nextFrameMessages_ = 1;
@@ -94,7 +95,6 @@ public:
             nextFrameMessages_++;
 
             if (nextFrameMessages_ > MAX_NEXT_FRAME_MESSAGES && previousFrame_) {
-                // Too many messages from newer frame and previous is still incomplete
                 previousFrame_.reset();
             }
         }
@@ -104,10 +104,10 @@ public:
 
 private:
     void initializeNewFrame(const UdpReplicationMessageHeader& header, const uint8_t* data, size_t dataSize) {
-        const size_t payloadSize = header.Size;
-        auto scope = buffer_.WriteScope(payloadSize, header.Type);
+        auto scope = buffer_.WriteScope(header.Size, header.Type);
 
-        size_t numChunks = (payloadSize + dataSize - 1) / dataSize;
+        // Calculate number of chunks based on max payload size
+        size_t numChunks = (header.Size + maxPayloadSize_ - 1) / maxPayloadSize_;
         currentFrame_ = std::make_unique<FrameState>(std::move(scope), numChunks);
         currentFrameCreated_ = header.Created;
 
@@ -117,7 +117,6 @@ private:
     bool processFrameFragment(FrameState& frame, const UdpReplicationMessageHeader& header,
         const uint8_t* data, size_t dataSize) {
         if (frame.receivedChunks[header.Sequence]) {
-            // Duplicate fragment - ignore
             return false;
         }
 
@@ -125,6 +124,7 @@ private:
 
         if (frame.isComplete()) {
             frame.scope.Span.Commit(header.Size);
+            this->currentFrame_.reset();
             return true;
         }
 
@@ -133,7 +133,8 @@ private:
 
     void writeChunk(FrameState& frame, const UdpReplicationMessageHeader& header,
         const uint8_t* data, size_t dataSize) {
-        const size_t offset = header.Sequence * dataSize;
+        // Calculate offset based on MTU payload size
+        const size_t offset = header.Sequence * maxPayloadSize_;
         std::memcpy(frame.scope.Span.Start + offset, data, dataSize);
 
         frame.receivedChunks[header.Sequence] = true;

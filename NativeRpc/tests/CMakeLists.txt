@@ -13,7 +13,7 @@ add_executable(ZeroCopyRpcTests  "ConcurrentDictionaryTests.cpp"
 "SyncLatencyTest.cpp"  
 "CyclicMemoryPoolTests.cpp" 
 "ReplicationTests.cpp" 
-"NamedSemaphoreTests.cpp" "UdpFrameIteratorTests.cpp" "UdpFrameDefragmentatorTests.cpp")
+"NamedSemaphoreTests.cpp" "UdpFrameIteratorTests.cpp" "UdpFrameDefragmentatorTests.cpp" "UdpFrameDefragmentatorPerfTest.cpp")
 
 
 # Include directories
