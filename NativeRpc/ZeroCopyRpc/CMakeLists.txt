@@ -43,13 +43,13 @@ link_directories("${BOOST_ROOT}/stage/lib")
 
 set(Boost_USE_STATIC_LIBS OFF)
 # Find Boost libraries (set required components)
-find_package(Boost REQUIRED COMPONENTS filesystem system program_options log log_setup thread)
+find_package(Boost REQUIRED COMPONENTS filesystem system program_options log log_setup thread url)
 
 
 
 if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
     # WINDOWS
-    target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup Boost::log)
+    target_link_libraries(ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup Boost::log Boost::url)
 else()
     # LINUX
     target_link_libraries(ZeroCopyRpc PRIVATE 
@@ -59,6 +59,7 @@ else()
         Boost::log 
         Boost::log_setup 
         Boost::thread
+        Boost::url
         atomic 
         pthread)
     
@@ -72,7 +73,7 @@ add_executable(zq
 )
 
 # Link the executable to the shared library
-target_link_libraries(zq PRIVATE ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup)
+target_link_libraries(zq PRIVATE ZeroCopyRpc Boost::filesystem Boost::system Boost::program_options Boost::log Boost::log_setup Boost::url)
 
 # Set output directories for the shared library
 set_target_properties(ZeroCopyRpc PROPERTIES

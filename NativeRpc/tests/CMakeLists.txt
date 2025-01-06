@@ -44,7 +44,7 @@ if(CMAKE_CXX_COMPILER MATCHES "cl.exe")
     target_link_libraries(ZeroCopyRpcTests PRIVATE gtest gtest_main ZeroCopyRpc)
 
 else()
-    find_package(Boost REQUIRED COMPONENTS filesystem system program_options log log_setup thread)
+    find_package(Boost REQUIRED COMPONENTS filesystem system program_options log log_setup thread url)
 
     target_link_libraries(ZeroCopyRpcTests PRIVATE 
             gtest 
@@ -56,6 +56,7 @@ else()
             Boost::log 
             Boost::log_setup 
             Boost::thread
+            Boost::url
             atomic 
             pthread)
 
