@@ -79,14 +79,15 @@ public:
             auto written = Span.CommitedSize();
             if (written > 0)
             {
-	            auto nxAtm = _parent->_nextIndex;
+                auto nxAtm = _parent->_nextIndex;
                 ulong nx = nxAtm->load();
-            	unsigned long capacity = *_parent->_capacity;
-                	            
+                unsigned long capacity = *_parent->_capacity;
+
                 long prvSize = nx >= capacity ? _parent->_items[(nx - capacity) % capacity].Size : 0;
                 _parent->_state->_currentSize.fetch_add(static_cast<int64_t>(written) - static_cast<int64_t>(prvSize));
                 _parent->_items[nx % capacity] = Entry{ written, Type, Span.StartOffset() };
-                nxAtm->fetch_add(1);
+                auto prv = nxAtm->fetch_add(1);
+                BOOST_LOG_TRIVIAL(debug) << "WriteScope, next-index increased: " << prv << "->" << nxAtm->load();
             }
         }
         WriterScope(const WriterScope&) = delete;
@@ -115,7 +116,7 @@ public:
     {
         ulong Index;
         
-        ulong Remaining() const { return *_parent->_nextIndex - Index - 1; }
+        ulong Remaining() const { return _parent->_nextIndex->load() - Index - 1; }
         Accessor Data() const
         {
             auto item = &(_parent->_items[(Index) % *_parent->_capacity]);
@@ -131,7 +132,7 @@ public:
         bool TryRead()
         {
             //std::cout << "CLIENT: TryRead, parent->nextIndex: " << _parent->_nextIndex << " Cursor.Index: " << Index << std::endl;
-            auto diff = *_parent->_nextIndex - Index;
+            auto diff = _parent->_nextIndex->load() - Index;
             if (diff > 1)
             {
                 //std::cout << "CLIENT: DIFF is positive, incrementing Index by 1." << std::endl;
@@ -155,7 +156,7 @@ public:
     };
     Cursor OpenCursor()
     {
-        return OpenCursor(*_nextIndex);
+        return OpenCursor(_nextIndex->load());
     }
     template<typename T, typename... Args>
     void Write(ulong type, Args&&... args) {
@@ -181,7 +182,7 @@ public:
     }
     ulong NextIndex() const
     {
-        return *_nextIndex;
+        return _nextIndex->load();
     }
 
     bool Unlock()

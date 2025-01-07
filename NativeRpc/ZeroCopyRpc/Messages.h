@@ -178,7 +178,7 @@ struct TopicMetadata
 
 struct SubscriptionSharedData
 {
-    ulong NextIndex;
+    std::atomic<ulong> NextIndex;
     std::atomic<ulong> Notified;
     std::atomic<bool> PendingRemove;
     std::atomic<bool> Active;
@@ -189,6 +189,8 @@ struct SubscriptionSharedData
         Active.store(true);
         PendingRemove.store(false);
     }
+
+    SubscriptionSharedData(const SubscriptionSharedData& other) = delete;
 };
 
 typedef RequestEnvelope<SubscribeCommand, 1> SubscribeCommandEnvelope;

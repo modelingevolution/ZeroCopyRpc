@@ -1,7 +1,10 @@
 #include "UdpReplicator.h"
 
 #include <boost/log/trivial.hpp>
+
+#include "UdpFrameDefragmentator.h"
 #include "ZeroCopyRpcException.h"
+#include "UdpFrameProcessor.h"
 
 void UdpReplicationSource::ReplicateLoop(std::shared_ptr<TopicReplicator> replicator) {
     while (replicator->Running && _running) {
@@ -10,20 +13,20 @@ void UdpReplicationSource::ReplicateLoop(std::shared_ptr<TopicReplicator> replic
         while (!replicator->Cursor->TryReadFor(msg, chrono::seconds(5)))
             if (!replicator->Running || !_running)
                 return;
+        auto now = std::chrono::steady_clock::now();
+        auto duration = now.time_since_epoch();
+        UdpFrameIterator<1500> iterator(msg.Get(), msg.Size(), msg.Type(), duration.count());
 
-        UdpReplicationMessageHeader header(msg.Size(), msg.Type());
-        
+        while(iterator.CanRead())
 
         try {
+            auto buffers = *iterator;
             // Create a scatter/gather array for sending both header and data in one datagram
-            std::array<asio::const_buffer, 2> buffers = {
-                asio::buffer(&header, sizeof(header)),
-                asio::buffer(msg.Get(), msg.Size())
-            };
 
             // Send both parts as a single datagram
             _socket.send_to(buffers, replicator->TargetEndpoint);
-            BOOST_LOG_TRIVIAL(debug) << "Sent ["<< replicator->TargetEndpoint.address().to_string() << ":"<< replicator->TargetEndpoint.port() << "]: " << (sizeof(header) + msg.Size()) << "B, message-size: " << msg.Size() << " msg-type: " << msg.Type();
+            //BOOST_LOG_TRIVIAL(debug) << "Sent [" << replicator->TargetEndpoint.address().to_string() << ":" << replicator->TargetEndpoint.port() << "]: " << (buffers[0].size() + msg.Size()) << "B, message-size: " << msg.Size() << " msg-type: " << msg.Type();
+            ++iterator;
         }
         catch (const boost::system::system_error& e) {
             BOOST_LOG_TRIVIAL(error) << "Failed to send UDP datagram: " << e.what();
@@ -81,41 +84,27 @@ void UdpReplicationSource::ReplicateTopic(const std::string& topicName, const st
 void UdpReplicationTarget::ReplicateLoop(std::shared_ptr<TopicReplicator> replicator) {
     auto topic = _shmServer->CreateTopic(replicator->TopicName);
     
-
+    UdpFrameDefragmentator defragmentator(*topic->GetBuffer(), 1500);
+    std::vector<byte> buffer(topic->MaxMessageSize());
     while (replicator->Running && _running) {
         try {
-            udp::endpoint sender_endpoint;
-            UdpReplicationMessageHeader  header;
-            size_t bytesReceived = 0;
-            // Prepare space in shared memory
-            {
-                auto scope = topic->Prepare(topic->MaxMessageSize(), 0); // Prepare with max possible size
-                auto& span = scope.Span();
+			udp::endpoint sender_endpoint;
+			
+			size_t bytesReceived = _socket.receive_from(asio::buffer(buffer), sender_endpoint);
+			auto ret = defragmentator.ProcessFragment(buffer.data(), bytesReceived);
 
-                // Create scatter/gather array for receiving both header and data
-                std::array<asio::mutable_buffer, 2> buffers = {
-                    asio::buffer(&header, sizeof(header)),
-                    asio::buffer(span.Start, span.Size)
-                };
-                scope.ChangeType(header.Type);
-                // Receive entire datagram
-                bytesReceived = _socket.receive_from(buffers, sender_endpoint);
+			if (bytesReceived < sizeof(UdpReplicationMessageHeader))
+				throw ZeroCopyRpcException("Replication message incomplete.");
+
+			if (ret)
+				topic->NotifyAll();
 
 
-                if (bytesReceived < sizeof(UdpReplicationMessageHeader))
-                    throw ZeroCopyRpcException("Replication message incomplete.");
-
-                size_t dataSize = bytesReceived - sizeof(UdpReplicationMessageHeader);
-                if (dataSize != header.Size)
-                    throw ZeroCopyRpcException("Data size mismatch");
-
-                span.Commit(dataSize);
-            }
-            BOOST_LOG_TRIVIAL(debug) << "Received datagram: " << bytesReceived << "B, message-size: " << header.Size << " msg-type: " << header.Type;
-        }
-        catch (const boost::system::system_error& e) {
-            BOOST_LOG_TRIVIAL(error) << "UDP receive error: " << e.what();
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			
+		}
+		catch (const boost::system::system_error& e) {
+			BOOST_LOG_TRIVIAL(error) << "UDP receive error: " << e.what();
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 }

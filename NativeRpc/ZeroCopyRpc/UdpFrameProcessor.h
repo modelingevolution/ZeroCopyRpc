@@ -10,12 +10,18 @@
 #include <boost/asio.hpp>
 #include "UdpReplicationMessages.h"
 #include <boost/asio/buffer.hpp>
+#include <algorithm>
 
 
 using namespace boost;
 using namespace boost::asio;
 //constexpr size_t UDP_MTU = 9000; // Jumbo frame MTU size
 constexpr size_t HEADER_SIZE = sizeof(UdpReplicationMessageHeader);
+
+//template <class _Ty>
+//constexpr const _Ty& min_i(const _Ty& _Left, const _Ty& _Right) noexcept(noexcept(_Right < _Left)) {
+//    return _Right < _Left ? _Right : _Left;
+//}
 
 // An iterator that is used when a udp frame needs be fragmented. Given we have buffer that contain the message (message-type), we need to create an
 // efficient iterator that would return all required frames. The UdpFrameIterator will work on typical MTU 1500 and jumbo MTU = 9KB.
@@ -36,7 +42,7 @@ public:
         if (offset_ >= _header.Size)
             throw std::out_of_range("Iterator out of range");
 
-        size_t chunkSize = std::min(PAYLOAD_SIZE, _header.Size - offset_);
+        size_t chunkSize = std::min<size_t>(PAYLOAD_SIZE, _header.Size - offset_);
 
         // Return the header and payload as a pair of buffers
         return {boost::asio::const_buffer(&_header, HEADER_SIZE), boost::asio::const_buffer(buffer_ + offset_, chunkSize) };
@@ -47,7 +53,7 @@ public:
         if (offset_ >= _header.Size)
             throw std::out_of_range("Iterator cannot be incremented past the end");
 
-        size_t chunkSize = std::min(PAYLOAD_SIZE, _header.Size - offset_);
+        size_t chunkSize = std::min<size_t>(PAYLOAD_SIZE, _header.Size - offset_);
         offset_ += chunkSize;
         ++_header.Sequence;
         return *this;
@@ -80,6 +86,7 @@ public:
     }
 
 private:
+    
     UdpReplicationMessageHeader _header;
     const uint8_t* buffer_;
     size_t offset_;

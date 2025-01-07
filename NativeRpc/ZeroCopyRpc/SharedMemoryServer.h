@@ -77,7 +77,7 @@ struct EXPORT PublishScope
 
 private:
 
-    CyclicBuffer::WriterScope _scope;
+    std::unique_ptr<CyclicBuffer::WriterScope> _scope;
     TopicService* _parent;
 };
 
@@ -127,6 +127,8 @@ public:
     byte Subscribe(pid_t pid);
     bool Unsubscribe(pid_t pid, byte id) const;
     std::string Name();
+    void NotifyAll();
+    CyclicBuffer* GetBuffer();
     ~TopicService();
 private:
     std::string _channelName;
@@ -146,7 +148,7 @@ private:
     // IN SHM
     CyclicBuffer* _buffer;
 
-    void NotifyAll();
+    
 };
 
 

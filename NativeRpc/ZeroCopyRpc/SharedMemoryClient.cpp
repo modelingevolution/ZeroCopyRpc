@@ -194,19 +194,22 @@ std::string SharedMemoryClient::SubscriptionCursor::SemaphoreName() const
 
 CyclicBuffer::Accessor SharedMemoryClient::SubscriptionCursor::Read()
 {
-	/*while (!_sem->try_wait())
-		ThreadSpin::Wait(100);*/
+	// WARNING: IF YOU CHANGE THIS METHOD, you need to change 2 more TryRead and Read
 	_sem->Acquire();
 
 	if(_cursor == nullptr)
 	{
-		auto value = _topic->Subscribers[_sloth].NextIndex; // this should the value from shared memory.
+		auto value = _topic->Subscribers[_sloth].NextIndex.load(); // this should the value from shared memory.
+		BOOST_LOG_TRIVIAL(debug) << "Loaded next cursor value: " << value;
 		_cursor = new CyclicBuffer::Cursor(_topic->SharedBuffer->OpenCursor(value)); // move ctor.
 	}
-	for(int i = 0; i < 10; i++)
+	for(int i = 0; i < 50; i++)
 	{
-		if(_cursor->TryRead())
+		if (_cursor->TryRead())
+		{
+			BOOST_LOG_TRIVIAL(debug) << "Waited " << (i * 200) << "CPU cycles before memory was in sync";
 			return _cursor->Data();
+		}
 		ThreadSpin::Wait(200);
 		//std::cout << "Data in SHM not yet ready.\n";
 	}
@@ -215,23 +218,26 @@ CyclicBuffer::Accessor SharedMemoryClient::SubscriptionCursor::Read()
 
 bool SharedMemoryClient::SubscriptionCursor::TryRead(CyclicBuffer::Accessor &a) 
 {
+	// WARNING: IF YOU CHANGE THIS METHOD, you need to change 2 more TryRead and Read
 	if (!_sem->TryAcquire())
 		return false;
 
 	if (_cursor == nullptr)
 	{
-		auto value = _topic->Subscribers[_sloth].NextIndex; // this should the value from shared memory.
+		auto value = _topic->Subscribers[_sloth].NextIndex.load(); // this should the value from shared memory.
+		BOOST_LOG_TRIVIAL(debug) << "Loaded next cursor value: " << value;
 		_cursor = new CyclicBuffer::Cursor(_topic->SharedBuffer->OpenCursor(value)); // move ctor.
 	}
 
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < 50; i++)
 	{
 		if (_cursor->TryRead())
 		{
+			BOOST_LOG_TRIVIAL(debug) << "Waited " << (i * 200) << "CPU cycles before memory was in sync";
 			a = std::move(_cursor->Data());
 			return true;
 		}
-		ThreadSpin::Wait(100);
+		ThreadSpin::Wait(200);
 	}
 	throw ZeroCopyRpcException("TryRead returned false.");
 }
@@ -298,21 +304,25 @@ bool SharedMemoryClient::SubscriptionCursor::TryReadFor(
 	CyclicBuffer::Accessor& a,
 	const std::chrono::milliseconds& timeout)
 {
+	// WARNING: IF YOU CHANGE THIS METHOD, you need to change 2 more TryRead and Read
 	if (!_sem->TryAcquireFor(timeout)) {
 		return false;
 	}
 
 	if (_cursor == nullptr) {
-		auto value = _topic->Subscribers[_sloth].NextIndex;
+		auto value = _topic->Subscribers[_sloth].NextIndex.load();
+		BOOST_LOG_TRIVIAL(debug) << "Loaded next cursor value: " << value;
 		_cursor = new CyclicBuffer::Cursor(_topic->SharedBuffer->OpenCursor(value));
 	}
 
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < 50; i++) {
 		if (_cursor->TryRead()) {
+			if(i > 0)
+				BOOST_LOG_TRIVIAL(debug) << "Waited " << (i * 200) << " CPU cycles before memory was in sync";
 			a = std::move(_cursor->Data());
 			return true;
 		}
-		ThreadSpin::Wait(100);
+		ThreadSpin::Wait(200);
 	}
 
 	throw ZeroCopyRpcException("TryRead returned false.");

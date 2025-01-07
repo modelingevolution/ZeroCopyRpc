@@ -79,8 +79,6 @@ boost::uuids::uuid TestFrame::ComputeHash(const unsigned char* data, size_t size
 
 std::ostream& operator<<(std::ostream& os, const TestFrame& frame)
 {
-	std::ostringstream oss;
-	oss << boost::uuids::to_string(frame.Header->Hash) << " [" << frame.Header->Size << "B]";
-	os << oss.str();
+	os << boost::uuids::to_string(frame.Header->Hash) << " [" << frame.Header->Size << "B]";
 	return os;
 }

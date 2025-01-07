@@ -60,8 +60,10 @@ void TopicService::NotifyAll()
 		{
 			if (data.Notified.fetch_add(1) == 0)
 			{
+				ulong nx = _buffer->NextIndex() - 1;
 				// this is the first time, need to set the cursors index.
-				data.NextIndex = _buffer->NextIndex();
+				data.NextIndex.store(nx);
+				BOOST_LOG_TRIVIAL(debug) << "Setting cursors next position to: " << nx;
 				//std::cout << "SERVER: Start offset set: " << data.NextIndex << std::endl;
 			}
 
@@ -79,9 +81,15 @@ void TopicService::NotifyAll()
 			s.Close();
 			data.PendingRemove.store(false);
 			data.Active.store(false);
-			this->_idPool.returns(s.Index);
+			if(s.Index >=0)
+				this->_idPool.returns(s.Index);
 		}
 	}
+}
+
+CyclicBuffer* TopicService::GetBuffer()
+{
+	return this->_buffer;
 }
 
 std::string TopicService::ShmName(const std::string& channel_name, const std::string& topic_name)
@@ -89,13 +97,14 @@ std::string TopicService::ShmName(const std::string& channel_name, const std::st
 	return channel_name + "." + topic_name + ".buffer";
 }
 
-PublishScope::PublishScope(CyclicBuffer::WriterScope&& w, TopicService* parent): _scope( std::move(w)), _parent(parent)
+PublishScope::PublishScope(CyclicBuffer::WriterScope&& w, TopicService* parent)
+	: _scope(std::make_unique<CyclicBuffer::WriterScope>(std::move(w)))
+	, _parent(parent)
 {
-		    
 }
 
 ulong PublishScope::Type() const
-{ return _scope.Type; }
+{ return _scope->Type; }
 
 PublishScope::PublishScope(PublishScope&& other) noexcept: _scope(std::move(other._scope))
 {
@@ -104,8 +113,9 @@ PublishScope::PublishScope(PublishScope&& other) noexcept: _scope(std::move(othe
 
 PublishScope::~PublishScope()
 {
-	if(_parent != nullptr && _scope.Span.CommitedSize() > 0)
+	if(_parent != nullptr && _scope->Span.CommitedSize() > 0)
 	{
+		_scope.reset();
 		_parent->NotifyAll();
 		_parent = nullptr;
 	}
@@ -315,12 +325,12 @@ std::string TopicService::Name()
 
 CyclicMemoryPool::Span& PublishScope::Span()
 {
-	CyclicMemoryPool::Span &p  = _scope.Span; return p;
+	CyclicMemoryPool::Span &p  = _scope->Span; return p;
 }
 
 void PublishScope::ChangeType(uint64_t type)
 {
-	_scope.Type = type;
+	_scope->Type = type;
 }
 
 byte SharedMemoryServer::Subscribe(const char* topicName, pid_t pid)

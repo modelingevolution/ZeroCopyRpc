@@ -183,7 +183,8 @@ TEST_F(UdpFrameDefragmentatorPerfTest, Test4MB_JumboMTU) {
 TEST_F(UdpFrameDefragmentatorPerfTest, Test1MB_OutOfOrder) {
     SetUp(1500);
 
-    BigFrame<1048576> frame;
+    auto bigFrame = std::make_unique<BigFrame<1048576>>();
+    BigFrame<1048576>& frame = *bigFrame;
     uint64_t created = 1234567890;
     uint8_t type = 1;
 

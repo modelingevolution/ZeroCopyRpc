@@ -3,19 +3,24 @@
 #include <unordered_map>
 #include "CyclicBuffer.hpp"
 #include "UdpReplicationMessages.h"
+#include <bitset>
+
+#include "FastBitSet.h"
 
 class UdpFrameDefragmentator {
 private:
     struct FrameState {
         CyclicBuffer::WriterScope scope;
-        std::vector<bool> receivedChunks;
+        
+        FastBitSet receivedChunks;
+        
         uint64_t lastActivity;
         uint16_t receivedCount;
         uint16_t expectedChunks;
 
         FrameState(CyclicBuffer::WriterScope&& s, size_t chunks)
             : scope(std::move(s))
-            , receivedChunks(chunks, false)
+            , receivedChunks(chunks)
             , lastActivity(0)
             , receivedCount(0)
             , expectedChunks(chunks)
@@ -23,7 +28,7 @@ private:
         }
 
         bool isComplete() const {
-            return receivedCount == expectedChunks;
+            return receivedChunks.isComplete();
         }
     };
 
@@ -61,6 +66,7 @@ public:
             auto scope = buffer_.WriteScope(header.Size, header.Type);
             std::memcpy(scope.Span.Start, data, dataSize);
             scope.Span.Commit(header.Size);
+            BOOST_LOG_TRIVIAL(debug) << "Received datagram: " << (dataSize+sizeof(UdpReplicationMessageHeader)) << "B, message-size: " << header.Size << " msg-type: " << header.Type;
             return true;
         }
 
@@ -116,7 +122,7 @@ private:
 
     bool processFrameFragment(FrameState& frame, const UdpReplicationMessageHeader& header,
         const uint8_t* data, size_t dataSize) {
-        if (frame.receivedChunks[header.Sequence]) {
+        if (frame.receivedChunks.getBit(header.Sequence)) {
             return false;
         }
 
@@ -137,7 +143,7 @@ private:
         const size_t offset = header.Sequence * maxPayloadSize_;
         std::memcpy(frame.scope.Span.Start + offset, data, dataSize);
 
-        frame.receivedChunks[header.Sequence] = true;
+        frame.receivedChunks.setBit(header.Sequence);
         frame.receivedCount++;
         frame.lastActivity = header.Created;
     }
