@@ -78,7 +78,7 @@ protected:
         uint8_t type = 1;
 
         auto cursor = cyclicBuffer.OpenCursor();
-        auto fragments = FragmentBigFrame(frame, created, type);
+        auto fragments = FragmentBigFrame<Size>(frame, created, type);
 
         // Measure defragmentation time
         auto start = high_resolution_clock::now();
@@ -153,7 +153,7 @@ TEST_F(UdpFrameDefragmentatorPerfTest, Test1MB_OutOfOrder) {
     uint8_t type = 1;
 
     auto cursor = cyclicBuffer.OpenCursor();
-    auto fragments = FragmentBigFrame(frame, created, type);
+    auto fragments = FragmentBigFrame<1048576>(frame, created, type);
 
     // Shuffle fragments to simulate out-of-order delivery
     std::random_device rd;
