@@ -13,6 +13,7 @@
 #include "PeriodicTimer.h"
 #include "StopWatch.h"
 #include "ThreadSpin.h"
+#include "BigFrame.hpp"
 #include "ZeroCopyRpcException.h"
 
 using namespace std::chrono;
@@ -188,44 +189,7 @@ TEST_F(SharedMemoryServerTest, LateSubscriptionScenario) {
 	auto second = cursor->TryRead(accessor);
 	EXPECT_FALSE(second);
 }
-template<unsigned int TSize>
-struct BigFrame
-{
-	uuid Hash;
-	unsigned char Data[TSize];
-	BigFrame()
-	{
-		static std::mt19937_64 rng(std::random_device{}());
-		std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
 
-		// Fill Data with random 64-bit chunks
-		uint64_t* dataAsUlong = reinterpret_cast<uint64_t*>(Data);
-		size_t numChunks = TSize / sizeof(uint64_t);
-
-		for (size_t i = 0; i < numChunks; ++i) {
-			dataAsUlong[i] = dist(rng);
-		}
-
-		Hash = computeHash(Data, TSize);
-	}
-private:
-	static uuid computeHash(const unsigned char* data, size_t size)
-	{
-		// Create an MD5 object
-		boost::uuids::detail::md5 hash;
-		// Process the data
-		hash.process_bytes(data, size);
-		// Retrieve the hash result
-		boost::uuids::detail::md5::digest_type digest;
-		hash.get_digest(digest);
-		// Convert the digest to a UUID
-		uuid result;
-		memcpy(&result, &digest, sizeof(digest));
-		if (sizeof(digest) != sizeof(uuid))
-			throw ZeroCopyRpcException("Fuck");
-		return result;
-	}
-};
 //typedef BigFrame<32768> MyBigFrame;
 typedef BigFrame<1920*1080*3/2> MyBigFrame;
 

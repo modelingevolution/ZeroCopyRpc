@@ -4,48 +4,12 @@
 #include <sstream>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/detail/md5.hpp>
+
+#include "BigFrame.hpp"
 #include "UdpFrameDefragmentator.h"
 #include "CyclicBuffer.hpp"
 
 using namespace boost::uuids;
-template<unsigned int TSize>
-struct BigFrame
-{
-    uuid Hash;
-    unsigned char Data[TSize];
-    BigFrame()
-    {
-        static std::mt19937_64 rng(std::random_device{}());
-        std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
-
-        // Fill Data with random 64-bit chunks
-        uint64_t* dataAsUlong = reinterpret_cast<uint64_t*>(Data);
-        size_t numChunks = TSize / sizeof(uint64_t);
-
-        for (size_t i = 0; i < numChunks; ++i) {
-            dataAsUlong[i] = dist(rng);
-        }
-
-        Hash = computeHash(Data, TSize);
-    }
-private:
-    static uuid computeHash(const unsigned char* data, size_t size)
-    {
-        // Create an MD5 object
-        boost::uuids::detail::md5 hash;
-        // Process the data
-        hash.process_bytes(data, size);
-        // Retrieve the hash result
-        boost::uuids::detail::md5::digest_type digest;
-        hash.get_digest(digest);
-        // Convert the digest to a UUID
-        uuid result;
-        memcpy(&result, &digest, sizeof(digest));
-        if (sizeof(digest) != sizeof(uuid))
-            throw ZeroCopyRpcException("Fuck");
-        return result;
-    }
-};
 
 class UdpFrameDefragmentatorPerfTest : public ::testing::Test {
 protected:
@@ -93,7 +57,7 @@ protected:
         for (size_t i = 0; i < numFragments; ++i) {
             size_t offset = i * maxPayloadSize;
             size_t remainingSize = totalSize - offset;
-            size_t fragmentDataSize = std::min(maxPayloadSize, remainingSize);
+            size_t fragmentDataSize = std::min<size_t>(maxPayloadSize, remainingSize);
 
             std::vector<byte> fragmentData(fragmentDataSize);
             memcpy(fragmentData.data(), fullData.data() + offset, fragmentDataSize);
